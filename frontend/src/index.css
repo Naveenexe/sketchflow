@@ -1,0 +1,204 @@
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f8fafc;
+  color: #1e293b;
+}
+
+/* SketchFlow Shell Styles */
+.sketchflow-container {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+}
+
+.sketchflow-header {
+  height: 54px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  z-index: 10;
+  user-select: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.sketchflow-left-section {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.sketchflow-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 18px;
+  color: #0f172a;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.sketchflow-logo-icon {
+  width: 30px;
+  height: 30px;
+  background: linear-gradient(135deg, #6366f1, #a855f7);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: 0 2px 4px rgba(99, 102, 241, 0.25);
+}
+
+.sketchflow-divider {
+  width: 1px;
+  height: 24px;
+  background-color: #e2e8f0;
+}
+
+.sketchflow-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sketchflow-title-input {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: transparent;
+  transition: all 0.15s ease;
+  width: 180px;
+}
+
+.sketchflow-title-input:hover {
+  background: #f1f5f9;
+}
+
+.sketchflow-title-input:focus {
+  outline: none;
+  background: #ffffff;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+  width: 240px;
+}
+
+.sketchflow-save-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #64748b;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background-color: #f8fafc;
+}
+
+.sketchflow-save-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #10b981;
+}
+
+.sketchflow-save-dot.saving {
+  background-color: #f59e0b;
+  animation: pulse 1.2s infinite;
+}
+
+.sketchflow-save-dot.offline {
+  background-color: #ef4444;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.9); }
+}
+
+.sketchflow-right-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sketchflow-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sketchflow-btn:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.sketchflow-btn-primary {
+  background: #6366f1;
+  color: #ffffff;
+  border-color: #6366f1;
+}
+
+.sketchflow-btn-primary:hover {
+  background: #4f46e5;
+  border-color: #4f46e5;
+}
+
+.sketchflow-user-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 4px;
+  background: #f1f5f9;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+}
+
+.sketchflow-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #6366f1;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sketchflow-canvas-wrapper {
+  flex: 1;
+  width: 100%;
+  height: calc(100vh - 54px);
+  position: relative;
+}
