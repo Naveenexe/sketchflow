@@ -4,17 +4,22 @@ server:
 spring:
   application:
     name: sketchflow-backend
+  jmx:
+    enabled: false
   datasource:
     url: ${SPRING_DATASOURCE_URL:}
     username: ${SPRING_DATASOURCE_USERNAME:}
     password: ${SPRING_DATASOURCE_PASSWORD:}
   jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
     open-in-view: false
     properties:
       hibernate:
         format_sql: false
+        temp:
+          use_jdbc_metadata_defaults: false
   flyway:
     enabled: true
     baseline-on-migrate: true
