@@ -282,6 +282,12 @@ export function getContrastRatio(hex1: string, hex2: string): number {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
+export function isDarkColor(hex: string): boolean {
+  const rgb = parseHexToRgb(hex);
+  if (!rgb) return false;
+  return relativeLuminance(rgb) < 0.35;
+}
+
 interface ThemeStoreState {
   presetId: ThemePresetId;
   customCanvas?: string;
@@ -380,3 +386,4 @@ export const useThemeStore = create<ThemeStoreState>((set, get) => {
     },
   };
 });
+

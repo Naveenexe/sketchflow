@@ -6,6 +6,10 @@ import { Lock, Download, Loader2, ShieldAlert, LogIn, Palette } from 'lucide-rea
 import { resolveShareLink } from '../services/boardService';
 import { useAuthStore } from '../store/authStore';
 import { THEME_MAP, useThemeStore } from '../store/themeStore';
+import {
+  adaptElementsForCanvas,
+  resolveBoardBackground,
+} from '../utils/sceneTheme';
 import type { Board } from '../types';
 import { ExportModal } from '../components/ExportModal';
 import { BrandMark } from '../components/BrandMark';
@@ -23,7 +27,8 @@ type ExcalidrawImperativeAPI = Parameters<
 
 function parseSceneSafe(
   raw: string | null | undefined,
-  fallbackCanvas: string
+  fallbackCanvas: string,
+  fallbackPen: string
 ): InitialDataState {
   if (!raw) {
     return { elements: [], appState: { viewBackgroundColor: fallbackCanvas } };
@@ -33,7 +38,9 @@ function parseSceneSafe(
       elements?: unknown[];
       appState?: Record<string, unknown>;
     };
-    const elements = Array.isArray(parsed.elements) ? parsed.elements : [];
+    const elements = Array.isArray(parsed.elements)
+      ? (parsed.elements as Record<string, unknown>[])
+      : [];
     const appState = { ...(parsed.appState || {}) };
     delete appState.collaborators;
 
@@ -41,17 +48,20 @@ function parseSceneSafe(
       typeof appState.viewBackgroundColor === 'string'
         ? appState.viewBackgroundColor
         : undefined;
-    const isEmptyDefaultBg =
-      elements.length === 0 && (!savedBg || savedBg.toLowerCase() === '#ffffff');
+    const resolvedBg = resolveBoardBackground(savedBg, fallbackCanvas);
+    const adaptedElements = adaptElementsForCanvas(
+      elements,
+      resolvedBg,
+      fallbackPen
+    );
 
     return {
-      elements,
+      elements: adaptedElements,
       appState: {
         ...appState,
-        viewBackgroundColor:
-          isEmptyDefaultBg || !savedBg ? fallbackCanvas : savedBg,
+        viewBackgroundColor: resolvedBg,
       },
-    } as InitialDataState;
+    } as unknown as InitialDataState;
   } catch {
     return { elements: [], appState: { viewBackgroundColor: fallbackCanvas } };
   }
@@ -64,9 +74,11 @@ export default function SharedBoardPage() {
 
   const presetId = useThemeStore((s) => s.presetId);
   const customCanvas = useThemeStore((s) => s.customCanvas);
+  const customPen = useThemeStore((s) => s.customPen);
   const canvasStyle = useThemeStore((s) => s.canvasStyle);
   const currentPreset = THEME_MAP[presetId];
   const activeCanvas = customCanvas || currentPreset.canvas;
+  const activePen = customPen || currentPreset.pen;
 
   const [board, setBoard] = useState<Board | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,6 +87,30 @@ export default function SharedBoardPage() {
   const [showThemeModal, setShowThemeModal] = useState(false);
 
   const excalidrawAPIRef = useRef<ExcalidrawImperativeAPI | null>(null);
+  const prevThemeCanvasRef = useRef<string>(activeCanvas);
+
+  useEffect(() => {
+    const api = excalidrawAPIRef.current;
+    if (!api || !board) return;
+    if (prevThemeCanvasRef.current === activeCanvas) return;
+    prevThemeCanvasRef.current = activeCanvas;
+
+    const currentElements =
+      api.getSceneElementsIncludingDeleted() as unknown as Record<string, unknown>[];
+    const adapted = adaptElementsForCanvas(
+      currentElements,
+      activeCanvas,
+      activePen
+    );
+    api.updateScene({
+      elements: adapted as unknown as Parameters<
+        ExcalidrawImperativeAPI['updateScene']
+      >[0]['elements'],
+      appState: {
+        viewBackgroundColor: activeCanvas,
+      },
+    });
+  }, [activeCanvas, activePen, board]);
 
   useEffect(() => {
     if (!token) return;
@@ -136,7 +172,7 @@ export default function SharedBoardPage() {
     );
   }
 
-  const initialScene = parseSceneSafe(board.sceneJson, activeCanvas);
+  const initialScene = parseSceneSafe(board.sceneJson, activeCanvas, activePen);
 
   return (
     <div

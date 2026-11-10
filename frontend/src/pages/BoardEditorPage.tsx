@@ -14,6 +14,10 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { THEME_MAP, useThemeStore } from '../store/themeStore';
+import {
+  adaptElementsForCanvas,
+  resolveBoardBackground,
+} from '../utils/sceneTheme';
 import { getBoard, saveBoardScene, updateBoard } from '../services/boardService';
 import type { Board } from '../types';
 import { ShareModal } from '../components/ShareModal';
@@ -63,28 +67,32 @@ function parseSceneWithDefaults(
       elements?: unknown[];
       appState?: Record<string, unknown>;
     };
-    const elements = Array.isArray(parsed.elements) ? parsed.elements : [];
+    const elements = Array.isArray(parsed.elements)
+      ? (parsed.elements as Record<string, unknown>[])
+      : [];
     const appState = { ...(parsed.appState || {}) };
     delete appState.collaborators;
 
-    // Empty boards inherit the active canvas background unless non-default,
-    // while non-empty boards always keep their saved viewBackgroundColor.
     const savedBg =
       typeof appState.viewBackgroundColor === 'string'
         ? appState.viewBackgroundColor
         : undefined;
-    const isEmptyDefaultBg =
-      elements.length === 0 && (!savedBg || savedBg.toLowerCase() === '#ffffff');
+    const resolvedBg = resolveBoardBackground(savedBg, activeCanvas);
+    const adaptedElements = adaptElementsForCanvas(
+      elements,
+      resolvedBg,
+      activePen
+    );
 
     return {
-      elements,
+      elements: adaptedElements,
       appState: {
         ...appState,
-        viewBackgroundColor: isEmptyDefaultBg || !savedBg ? activeCanvas : savedBg,
+        viewBackgroundColor: resolvedBg,
         currentItemStrokeColor: activePen,
         currentItemRoughness: sketchyStyle ? 1 : 0,
       },
-    } as InitialDataState;
+    } as unknown as InitialDataState;
   } catch {
     return { elements: [], appState: defaultAppState } as InitialDataState;
   }
@@ -228,30 +236,53 @@ export default function BoardEditorPage() {
     [boardId, unsavedStorageKey, cacheBoardThumbnail]
   );
 
+  const prevThemeCanvasRef = useRef<string>(activeCanvas);
+
   // Sync user's pen/roughness defaults dynamically into active Excalidraw instance
   useEffect(() => {
     const api = excalidrawAPIRef.current;
     if (!api || !board || board.userRole === 'VIEWER') return;
+    isApplyingRemoteRef.current = true;
     api.updateScene({
       appState: {
         currentItemStrokeColor: activePen,
         currentItemRoughness: sketchyStyle ? 1 : 0,
       },
     });
+    setTimeout(() => {
+      isApplyingRemoteRef.current = false;
+    }, 0);
   }, [activePen, sketchyStyle, board]);
 
-  // Update background on empty boards when preset/customCanvas changes
+  // Apply canvas & contrast adaptation whenever the user changes theme or custom canvas
   useEffect(() => {
     const api = excalidrawAPIRef.current;
-    if (!api || !board || board.userRole === 'VIEWER') return;
-    if (api.getSceneElements().length === 0) {
-      api.updateScene({
-        appState: {
-          viewBackgroundColor: activeCanvas,
-        },
-      });
-    }
-  }, [activeCanvas, board]);
+    if (!api || !board) return;
+    if (prevThemeCanvasRef.current === activeCanvas) return;
+    prevThemeCanvasRef.current = activeCanvas;
+
+    const currentElements =
+      api.getSceneElementsIncludingDeleted() as unknown as Record<string, unknown>[];
+    const adapted = adaptElementsForCanvas(
+      currentElements,
+      activeCanvas,
+      activePen
+    );
+
+    isApplyingRemoteRef.current = true;
+    api.updateScene({
+      elements: adapted as unknown as Parameters<
+        ExcalidrawImperativeAPI['updateScene']
+      >[0]['elements'],
+      appState: {
+        viewBackgroundColor: activeCanvas,
+        currentItemStrokeColor: activePen,
+      },
+    });
+    setTimeout(() => {
+      isApplyingRemoteRef.current = false;
+    }, 0);
+  }, [activeCanvas, activePen, board]);
 
   // Real-time collaboration handlers
   const handleRemoteSceneUpdate = useCallback(
@@ -259,11 +290,13 @@ export default function BoardEditorPage() {
       const api = excalidrawAPIRef.current;
       if (!api) return;
 
+      const { activeCanvas: bg, activePen: pen } = defaultsRef.current;
+      const adaptedRemote = adaptElementsForCanvas(remoteElements, bg, pen);
       const localElements =
         api.getSceneElementsIncludingDeleted() as unknown as ExcalidrawElementLike[];
       const merged = mergeElements(
         localElements,
-        remoteElements as unknown as ExcalidrawElementLike[]
+        adaptedRemote as unknown as ExcalidrawElementLike[]
       );
 
       isApplyingRemoteRef.current = true;

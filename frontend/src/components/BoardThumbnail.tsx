@@ -182,3 +182,4 @@ export function BoardThumbnail({ boardId, sceneJson }: BoardThumbnailProps) {
     </div>
   );
 }
+
