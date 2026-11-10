@@ -2,7 +2,7 @@
 
 **SketchFlow** is a browser-based collaborative online whiteboard built with **React**, **TypeScript**, **Excalidraw**, **Java Spring Boot**, and **Neon PostgreSQL**.
 
-Live Demo: **[https://sketchflow.watarenaveen.workers.dev/](https://sketchflow.watarenaveen.workers.dev/)**
+Live Demo: **[https://sketchflow.sketchflow.workers.dev/](https://sketchflow.sketchflow.workers.dev/)**
 
 ---
 
@@ -103,7 +103,7 @@ npm run dev
 ## Deployment Guide
 
 1. **Database (Neon):** Create a Neon project and database (`sketchflow_db`). Use the pooled connection string (`-pooler`) for application traffic.
-2. **Backend (Render / Docker):** Connect the GitHub repo with Root Directory `backend` and Runtime `Docker`. Configure `DATABASE_URL`, `JWT_SECRET`, and `APP_CORS_ALLOWED_ORIGINS` (set to your exact frontend origin, e.g., `https://sketchflow.watarenaveen.workers.dev`) in Render's Environment tab.
+2. **Backend (Render / Docker):** Connect the GitHub repo with Root Directory `backend` and Runtime `Docker`. Configure `DATABASE_URL`, `JWT_SECRET`, and `APP_CORS_ALLOWED_ORIGINS` (set to your exact frontend origin, e.g., `https://sketchflow.sketchflow.workers.dev`) in Render's Environment tab.
 3. **Frontend (Cloudflare Pages / Workers):** Connect the GitHub repo with Root Directory `frontend`, Build command `npm run build`, Output directory `dist`, and set `VITE_API_BASE_URL` and `VITE_WS_URL` to your deployed backend URL.
 
 ---

@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, ArrowRight, Loader2 } from 'lucide-react';
+import { ArrowRight, Loader2 } from 'lucide-react';
 import { loginUser, registerUser } from '../services/authService';
 import { useAuthStore } from '../store/authStore';
 import { CloudStatusBadge } from '../components/CloudStatusBadge';
+import { BrandMark } from '../components/BrandMark';
+import { ThemeQuickControls } from '../components/ThemeQuickControls';
 
 export default function AuthPage() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -62,24 +64,32 @@ export default function AuthPage() {
 
   return (
     <div className="auth-layout">
-      <div className="auth-topbar">
-        <div className="sketchflow-brand">
-          <div className="sketchflow-logo-icon">
-            <Sparkles size={18} />
+      <header className="sf-topbar">
+        <div className="sf-topbar-left">
+          <div className="sf-brand" style={{ cursor: 'default' }}>
+            <BrandMark size={20} />
+            <span>SketchFlow</span>
           </div>
-          <span>SketchFlow</span>
         </div>
-        <CloudStatusBadge />
-      </div>
+        <div className="sf-topbar-right">
+          <CloudStatusBadge />
+          <ThemeQuickControls showEditorOptions={false} />
+        </div>
+      </header>
 
-      <div className="auth-card-wrapper">
+      <main className="auth-card-wrapper">
         <div className="auth-card">
+          <div className="auth-card-brand">
+            <BrandMark size={20} />
+            <span>SketchFlow</span>
+          </div>
+
           <div className="auth-card-header">
-            <h1>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1>
+            <h1>{mode === 'login' ? 'Sign in' : 'Create account'}</h1>
             <p>
               {mode === 'login'
-                ? 'Sign in to open your whiteboards and collaborate.'
-                : 'Start creating and saving visual boards in the cloud.'}
+                ? 'Open your workspace and continue sketching.'
+                : 'Start creating and sharing visual boards.'}
             </p>
           </div>
 
@@ -91,6 +101,7 @@ export default function AuthPage() {
                 <label htmlFor="displayName">Display Name</label>
                 <input
                   id="displayName"
+                  className="sf-input"
                   type="text"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
@@ -105,6 +116,7 @@ export default function AuthPage() {
               <label htmlFor="email">Email Address</label>
               <input
                 id="email"
+                className="sf-input"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -118,6 +130,7 @@ export default function AuthPage() {
               <label htmlFor="password">Password</label>
               <input
                 id="password"
+                className="sf-input"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -129,25 +142,25 @@ export default function AuthPage() {
 
             <button
               type="submit"
-              className="sketchflow-btn sketchflow-btn-primary auth-submit-btn"
+              className="sf-btn sf-btn-primary auth-submit-btn"
               disabled={loading}
             >
               {loading ? (
                 <>
-                  <Loader2 size={16} className="spin" />
+                  <Loader2 size={16} strokeWidth={1.5} className="spin" />
                   <span>{mode === 'login' ? 'Signing in...' : 'Creating account...'}</span>
                 </>
               ) : (
                 <>
                   <span>{mode === 'login' ? 'Sign In' : 'Create Account'}</span>
-                  <ArrowRight size={16} />
+                  <ArrowRight size={16} strokeWidth={1.5} />
                 </>
               )}
             </button>
 
             {slowNotice && (
               <p className="auth-slow-notice">
-                Waking up the free-tier backend server—this can take ~30 seconds on first visit...
+                Waking up the free-tier backend server — this can take ~30 seconds on first visit.
               </p>
             )}
           </form>
@@ -158,7 +171,7 @@ export default function AuthPage() {
                 Don&apos;t have an account?{' '}
                 <button
                   type="button"
-                  className="auth-switch-btn"
+                  className="text-action-btn"
                   onClick={() => {
                     setMode('register');
                     setError(null);
@@ -172,7 +185,7 @@ export default function AuthPage() {
                 Already have an account?{' '}
                 <button
                   type="button"
-                  className="auth-switch-btn"
+                  className="text-action-btn"
                   onClick={() => {
                     setMode('login');
                     setError(null);
@@ -184,8 +197,9 @@ export default function AuthPage() {
             )}
           </div>
         </div>
-      </div>
+      </main>
+
+      <footer className="sf-footer">Built with Excalidraw</footer>
     </div>
   );
 }
-

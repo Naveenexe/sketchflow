@@ -1,24 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Excalidraw } from '@excalidraw/excalidraw';
+import { Excalidraw, MainMenu, exportToBlob } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
 import {
-  Sparkles,
   ArrowLeft,
-  Share2,
   Download,
-  Lock,
+  Share2,
   Loader2,
+  Lock,
   AlertTriangle,
-  Wifi,
-  WifiOff,
+  Palette,
+  Grid3X3,
 } from 'lucide-react';
-import { getBoard, saveBoardScene, updateBoard } from '../services/boardService';
 import { useAuthStore } from '../store/authStore';
+import { THEME_MAP, useThemeStore } from '../store/themeStore';
+import { getBoard, saveBoardScene, updateBoard } from '../services/boardService';
 import type { Board } from '../types';
-import { useCollaboration, type RemoteCollaborator } from '../hooks/useCollaboration';
 import { ShareModal } from '../components/ShareModal';
 import { ExportModal } from '../components/ExportModal';
+import { ThemePickerModal } from '../components/ThemePickerModal';
+import { ThemeQuickControls } from '../components/ThemeQuickControls';
+import { BrandMark } from '../components/BrandMark';
+import {
+  useCollaboration,
+  type RemoteCollaborator,
+} from '../hooks/useCollaboration';
 
 type ExcalidrawProps = Parameters<typeof Excalidraw>[0];
 type InitialDataState = Exclude<
@@ -36,21 +42,51 @@ interface ExcalidrawElementLike {
   [key: string]: unknown;
 }
 
-function parseSceneSafe(raw: string | null | undefined): InitialDataState {
-  if (!raw) return { elements: [], appState: { viewBackgroundColor: '#ffffff' } };
+function parseSceneWithDefaults(
+  raw: string | null | undefined,
+  activeCanvas: string,
+  activePen: string,
+  sketchyStyle: boolean
+): InitialDataState {
+  const defaultAppState = {
+    viewBackgroundColor: activeCanvas,
+    currentItemStrokeColor: activePen,
+    currentItemRoughness: sketchyStyle ? 1 : 0,
+  };
+
+  if (!raw) {
+    return { elements: [], appState: defaultAppState } as InitialDataState;
+  }
+
   try {
     const parsed = JSON.parse(raw) as {
       elements?: unknown[];
       appState?: Record<string, unknown>;
     };
+    const elements = Array.isArray(parsed.elements) ? parsed.elements : [];
     const appState = { ...(parsed.appState || {}) };
     delete appState.collaborators;
+
+    // Empty boards inherit the active canvas background unless non-default,
+    // while non-empty boards always keep their saved viewBackgroundColor.
+    const savedBg =
+      typeof appState.viewBackgroundColor === 'string'
+        ? appState.viewBackgroundColor
+        : undefined;
+    const isEmptyDefaultBg =
+      elements.length === 0 && (!savedBg || savedBg.toLowerCase() === '#ffffff');
+
     return {
-      elements: Array.isArray(parsed.elements) ? parsed.elements : [],
-      appState,
+      elements,
+      appState: {
+        ...appState,
+        viewBackgroundColor: isEmptyDefaultBg || !savedBg ? activeCanvas : savedBg,
+        currentItemStrokeColor: activePen,
+        currentItemRoughness: sketchyStyle ? 1 : 0,
+      },
     } as InitialDataState;
   } catch {
-    return { elements: [], appState: { viewBackgroundColor: '#ffffff' } };
+    return { elements: [], appState: defaultAppState } as InitialDataState;
   }
 }
 
@@ -90,6 +126,18 @@ export default function BoardEditorPage() {
   const user = useAuthStore((s) => s.user);
   const token = useAuthStore((s) => s.token);
 
+  const presetId = useThemeStore((s) => s.presetId);
+  const customCanvas = useThemeStore((s) => s.customCanvas);
+  const customPen = useThemeStore((s) => s.customPen);
+  const sketchyStyle = useThemeStore((s) => s.sketchyStyle);
+  const canvasStyle = useThemeStore((s) => s.canvasStyle);
+  const autoHideBar = useThemeStore((s) => s.autoHideBar);
+  const setCanvasStyle = useThemeStore((s) => s.setCanvasStyle);
+
+  const currentPreset = THEME_MAP[presetId];
+  const activeCanvas = customCanvas || currentPreset.canvas;
+  const activePen = customPen || currentPreset.pen;
+
   const [board, setBoard] = useState<Board | null>(null);
   const [boardTitle, setBoardTitle] = useState('Untitled Board');
   const [initialScene, setInitialScene] = useState<InitialDataState | null>(null);
@@ -98,6 +146,8 @@ export default function BoardEditorPage() {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'offline'>('saved');
   const [showShareModal, setShowShareModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showThemeModal, setShowThemeModal] = useState(false);
+  const [isDrawing, setIsDrawing] = useState(false);
 
   const excalidrawAPIRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const isApplyingRemoteRef = useRef(false);
@@ -107,7 +157,50 @@ export default function BoardEditorPage() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const defaultsRef = useRef({ activeCanvas, activePen, sketchyStyle });
+  useEffect(() => {
+    defaultsRef.current = { activeCanvas, activePen, sketchyStyle };
+  }, [activeCanvas, activePen, sketchyStyle]);
+
   const unsavedStorageKey = boardId ? `sketchflow_unsaved_${boardId}` : '';
+
+  const cacheBoardThumbnail = useCallback(async (id: string) => {
+    const api = excalidrawAPIRef.current;
+    if (!api) return;
+    const elements = api.getSceneElements();
+    if (!elements || elements.length === 0) {
+      try {
+        localStorage.removeItem(`sketchflow_thumb_${id}`);
+      } catch {
+        // ignore
+      }
+      return;
+    }
+    try {
+      const blob = await exportToBlob({
+        elements,
+        appState: {
+          ...api.getAppState(),
+          exportWithDarkMode: false,
+        } as Parameters<typeof exportToBlob>[0]['appState'],
+        files: api.getFiles(),
+        maxWidthOrHeight: 400,
+      });
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          try {
+            localStorage.setItem(`sketchflow_thumb_${id}`, reader.result);
+          } catch {
+            // quota full — SVG fallback in BoardThumbnail handles it cleanly
+          }
+        }
+      };
+      reader.readAsDataURL(blob);
+    } catch {
+      // ignore thumbnail failure
+    }
+  }, []);
 
   const persistScene = useCallback(
     async (payload: string) => {
@@ -121,6 +214,7 @@ export default function BoardEditorPage() {
           localStorage.removeItem(unsavedStorageKey);
         }
         setSaveStatus('saved');
+        cacheBoardThumbnail(boardId);
       } catch {
         setSaveStatus('offline');
         if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
@@ -131,8 +225,33 @@ export default function BoardEditorPage() {
         }, 5000);
       }
     },
-    [boardId, unsavedStorageKey]
+    [boardId, unsavedStorageKey, cacheBoardThumbnail]
   );
+
+  // Sync user's pen/roughness defaults dynamically into active Excalidraw instance
+  useEffect(() => {
+    const api = excalidrawAPIRef.current;
+    if (!api || !board || board.userRole === 'VIEWER') return;
+    api.updateScene({
+      appState: {
+        currentItemStrokeColor: activePen,
+        currentItemRoughness: sketchyStyle ? 1 : 0,
+      },
+    });
+  }, [activePen, sketchyStyle, board]);
+
+  // Update background on empty boards when preset/customCanvas changes
+  useEffect(() => {
+    const api = excalidrawAPIRef.current;
+    if (!api || !board || board.userRole === 'VIEWER') return;
+    if (api.getSceneElements().length === 0) {
+      api.updateScene({
+        appState: {
+          viewBackgroundColor: activeCanvas,
+        },
+      });
+    }
+  }, [activeCanvas, board]);
 
   // Real-time collaboration handlers
   const handleRemoteSceneUpdate = useCallback(
@@ -163,7 +282,9 @@ export default function BoardEditorPage() {
   const handleResyncState = useCallback((sceneJson: string) => {
     const api = excalidrawAPIRef.current;
     if (!api) return;
-    const parsed = parseSceneSafe(sceneJson);
+    const { activeCanvas: bg, activePen: pen, sketchyStyle: sketchy } =
+      defaultsRef.current;
+    const parsed = parseSceneWithDefaults(sceneJson, bg, pen, sketchy);
     const localElements =
       api.getSceneElementsIncludingDeleted() as unknown as ExcalidrawElementLike[];
     const remoteElements = (parsed.elements ||
@@ -224,21 +345,22 @@ export default function BoardEditorPage() {
         setBoard(fetched);
         setBoardTitle(fetched.title);
 
+        const { activeCanvas: bg, activePen: pen, sketchyStyle: sketchy } =
+          defaultsRef.current;
         const localBackup = localStorage.getItem(`sketchflow_unsaved_${boardId}`);
         if (localBackup && fetched.userRole !== 'VIEWER') {
-          const parsed = parseSceneSafe(localBackup);
+          const parsed = parseSceneWithDefaults(localBackup, bg, pen, sketchy);
           setInitialScene(parsed);
           lastSavedJsonRef.current = fetched.sceneJson || '';
           pendingPayloadRef.current = localBackup;
           persistScene(localBackup);
         } else {
-          const parsed = parseSceneSafe(fetched.sceneJson);
+          const parsed = parseSceneWithDefaults(fetched.sceneJson, bg, pen, sketchy);
           setInitialScene(parsed);
           lastSavedJsonRef.current = JSON.stringify({
             elements: parsed.elements || [],
             appState: {
-              viewBackgroundColor:
-                parsed.appState?.viewBackgroundColor || '#ffffff',
+              viewBackgroundColor: parsed.appState?.viewBackgroundColor || bg,
             },
           });
         }
@@ -283,7 +405,8 @@ export default function BoardEditorPage() {
       const serialized = JSON.stringify({
         elements,
         appState: {
-          viewBackgroundColor: appState?.viewBackgroundColor || '#ffffff',
+          viewBackgroundColor:
+            appState?.viewBackgroundColor || defaultsRef.current.activeCanvas,
         },
       });
 
@@ -291,10 +414,8 @@ export default function BoardEditorPage() {
         return;
       }
 
-      // Broadcast real-time update to peers (throttled at 80ms)
       sendSceneUpdate(elements);
 
-      // Protect unsaved work locally immediately (FR-BOARD-07)
       pendingPayloadRef.current = serialized;
       if (unsavedStorageKey) {
         localStorage.setItem(unsavedStorageKey, serialized);
@@ -329,8 +450,8 @@ export default function BoardEditorPage() {
   if (loading) {
     return (
       <div className="dashboard-empty" style={{ height: '100vh' }}>
-        <Loader2 size={32} className="spin" />
-        <p>Loading board canvas...</p>
+        <Loader2 size={16} strokeWidth={1.5} className="spin" />
+        <p>Loading board...</p>
       </div>
     );
   }
@@ -338,15 +459,15 @@ export default function BoardEditorPage() {
   if (loadError || !board) {
     return (
       <div className="dashboard-empty" style={{ height: '100vh' }}>
-        <AlertTriangle size={40} color="#ef4444" />
+        <AlertTriangle size={20} strokeWidth={1.5} color="var(--danger)" />
         <h3>Unable to open board</h3>
         <p>{loadError || 'Board not found.'}</p>
         <button
           type="button"
-          className="sketchflow-btn sketchflow-btn-primary"
+          className="sf-btn sf-btn-primary"
           onClick={() => navigate('/dashboard')}
         >
-          <ArrowLeft size={15} />
+          <ArrowLeft size={16} strokeWidth={1.5} />
           <span>Back to Dashboard</span>
         </button>
       </div>
@@ -357,65 +478,65 @@ export default function BoardEditorPage() {
   const isOwner = board.userRole === 'OWNER';
 
   return (
-    <div className="sketchflow-container">
-      {/* Top Application Shell */}
-      <header className="sketchflow-header">
-        <div className="sketchflow-left-section">
+    <div
+      className={`sketchflow-container sketchflow-editor-shell ${
+        autoHideBar ? 'sf-container-autohide' : ''
+      } ${autoHideBar && isDrawing ? 'is-drawing' : ''}`}
+      data-canvas-style={canvasStyle}
+    >
+      <header className="sf-topbar sf-topbar-auto-hide">
+        <div className="sf-topbar-left">
           <button
             type="button"
             className="icon-btn"
             onClick={() => navigate('/dashboard')}
             title="Back to Dashboard"
+            aria-label="Back to Dashboard"
           >
-            <ArrowLeft size={16} />
+            <ArrowLeft size={20} strokeWidth={1.5} />
           </button>
 
-          <div
-            className="sketchflow-brand"
+          <button
+            type="button"
+            className="sf-brand"
             onClick={() => navigate('/dashboard')}
             title="SketchFlow Workspace"
           >
-            <div className="sketchflow-logo-icon">
-              <Sparkles size={18} />
-            </div>
+            <BrandMark size={20} />
             <span>SketchFlow</span>
-          </div>
+          </button>
 
-          <div className="sketchflow-divider" />
+          <div className="sf-divider" />
 
-          {/* Board Title Input */}
-          <div className="sketchflow-title-wrapper">
-            <input
-              type="text"
-              className="sketchflow-title-input"
-              value={boardTitle}
-              onChange={(e) => setBoardTitle(e.target.value)}
-              onBlur={handleTitleSave}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-              }}
-              disabled={!isOwner}
-              title={
-                isOwner ? 'Click to rename board' : 'Only the owner can rename'
-              }
-              aria-label="Board title"
-            />
-          </div>
+          <input
+            type="text"
+            className="sf-title-input"
+            value={boardTitle}
+            onChange={(e) => setBoardTitle(e.target.value)}
+            onBlur={handleTitleSave}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+            }}
+            disabled={!isOwner}
+            title={
+              isOwner ? 'Click to rename board' : 'Only the owner can rename'
+            }
+            aria-label="Board title"
+          />
 
-          {/* Autosave Status Indicator */}
           {isViewer ? (
-            <div className="sketchflow-save-indicator">
-              <Lock size={12} />
-              <span>View Only</span>
+            <div className="status-indicator">
+              <Lock size={16} strokeWidth={1.5} />
+              <span>View only</span>
             </div>
           ) : (
-            <div className="sketchflow-save-indicator">
+            <div className="status-indicator">
               <span
-                className={`sketchflow-save-dot ${
-                  saveStatus === 'saving'
-                    ? 'saving'
+                className={`status-dot ${
+                  saveStatus === 'saved'
+                    ? 'live'
                     : saveStatus === 'offline'
-                    ? 'offline'
+                    ? 'error'
                     : ''
                 }`}
               />
@@ -424,15 +545,13 @@ export default function BoardEditorPage() {
                   ? 'Saved'
                   : saveStatus === 'saving'
                   ? 'Saving...'
-                  : 'Offline / Retrying'}
+                  : 'Offline'}
               </span>
             </div>
           )}
         </div>
 
-        {/* Right Action Shell */}
-        <div className="sketchflow-right-section">
-          {/* Active Collaborator Avatars */}
+        <div className="sf-topbar-right">
           {participants.length > 0 && (
             <div
               className="collab-avatars"
@@ -458,59 +577,61 @@ export default function BoardEditorPage() {
             </div>
           )}
 
-          {/* WebSocket Live Sync Pill */}
           <div
-            className="sketchflow-save-indicator"
-            style={{ border: '1px solid #e2e8f0' }}
+            className="status-indicator"
             title={collabError || 'Real-time WebSocket status'}
           >
-            {wsStatus === 'connected' ? (
-              <Wifi size={13} color="#10b981" />
-            ) : (
-              <WifiOff size={13} color="#f59e0b" />
-            )}
+            <span
+              className={`status-dot ${wsStatus === 'connected' ? 'live' : ''}`}
+            />
             <span>
               {wsStatus === 'connected'
                 ? `Live (${participants.length || 1})`
                 : wsStatus === 'reconnecting'
                 ? 'Syncing...'
-                : 'Connecting WS...'}
+                : 'Connecting...'}
             </span>
           </div>
 
+          <ThemeQuickControls showEditorOptions={true} />
+
           <button
             type="button"
-            className="sketchflow-btn"
+            className="sf-btn"
             onClick={() => setShowExportModal(true)}
             title="Export & Backup Board"
           >
-            <Download size={15} />
+            <Download size={16} strokeWidth={1.5} />
             <span>Export</span>
           </button>
 
           <button
             type="button"
-            className="sketchflow-btn sketchflow-btn-primary"
+            className="sf-btn sf-btn-primary"
             onClick={() => setShowShareModal(true)}
             title="Invite Collaborators & Share"
           >
-            <Share2 size={15} />
+            <Share2 size={16} strokeWidth={1.5} />
             <span>Share</span>
           </button>
         </div>
       </header>
 
-      {/* Embedded Whiteboard Canvas */}
       <main className="sketchflow-canvas-wrapper">
         <Excalidraw
           excalidrawAPI={(api) => {
             excalidrawAPIRef.current = api;
           }}
           name={boardTitle}
+          theme={currentPreset.mode}
+          gridModeEnabled={canvasStyle === 'dots'}
           initialData={initialScene || undefined}
           viewModeEnabled={isViewer}
           onChange={(elements, appState) => handleSceneChange(elements, appState)}
           onPointerUpdate={(payload) => {
+            if (autoHideBar) {
+              setIsDrawing(payload?.button === 'down');
+            }
             if (payload?.pointer) {
               sendCursorUpdate(payload.pointer, payload.button || 'up');
             }
@@ -519,10 +640,42 @@ export default function BoardEditorPage() {
             canvasActions: {
               saveToActiveFile: false,
               loadScene: !isViewer,
-              toggleTheme: true,
+              toggleTheme: false,
+            },
+            tools: {
+              image: !isViewer,
             },
           }}
-        />
+        >
+          <MainMenu>
+            <MainMenu.Item
+              icon={<Download size={16} strokeWidth={1.5} />}
+              onSelect={() => setShowExportModal(true)}
+            >
+              Export &amp; Backup
+            </MainMenu.Item>
+            <MainMenu.Item
+              icon={<Palette size={16} strokeWidth={1.5} />}
+              onSelect={() => setShowThemeModal(true)}
+            >
+              Appearance &amp; Canvas
+            </MainMenu.Item>
+            <MainMenu.Item
+              icon={<Grid3X3 size={16} strokeWidth={1.5} />}
+              onSelect={() =>
+                setCanvasStyle(canvasStyle === 'dots' ? 'plain' : 'dots')
+              }
+            >
+              {canvasStyle === 'dots' ? 'Hide dot grid' : 'Show dot grid'}
+            </MainMenu.Item>
+            <MainMenu.Separator />
+            <MainMenu.ItemCustom>
+              <div className="excalidraw-credit" style={{ padding: '4px 12px' }}>
+                Built with Excalidraw
+              </div>
+            </MainMenu.ItemCustom>
+          </MainMenu>
+        </Excalidraw>
       </main>
 
       {showShareModal && (
@@ -531,6 +684,13 @@ export default function BoardEditorPage() {
           boardTitle={boardTitle}
           isOwner={isOwner}
           onClose={() => setShowShareModal(false)}
+        />
+      )}
+
+      {showThemeModal && (
+        <ThemePickerModal
+          onClose={() => setShowThemeModal(false)}
+          showEditorOptions={true}
         />
       )}
 

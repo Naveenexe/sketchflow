@@ -26,29 +26,23 @@ export function CloudStatusBadge() {
   return (
     <button
       type="button"
-      className="sketchflow-save-indicator"
-      style={{ border: '1px solid #e2e8f0', cursor: 'pointer' }}
+      className="status-indicator status-indicator-btn"
       onClick={checkHealth}
       title="Click to verify cloud API & database health"
     >
       <span
-        className={`sketchflow-save-dot ${
-          status === 'connecting'
-            ? 'saving'
-            : status === 'error'
-            ? 'offline'
-            : ''
+        className={`status-dot ${
+          status === 'connected' ? 'live' : status === 'error' ? 'error' : ''
         }`}
       />
       <span>
         {status === 'connected'
-          ? 'Cloud API: Online'
+          ? 'API online'
           : status === 'connecting'
-          ? 'Cloud API: Waking...'
-          : 'Cloud API: Retry'}
+          ? 'Waking server...'
+          : 'API offline — retry'}
       </span>
-      {status === 'error' && <RefreshCw size={12} />}
+      {status === 'error' && <RefreshCw size={16} strokeWidth={1.5} />}
     </button>
   );
 }
-

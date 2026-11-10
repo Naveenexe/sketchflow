@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Sparkles,
   Plus,
   LogOut,
   Trash2,
@@ -9,9 +8,8 @@ import {
   Archive,
   ArchiveRestore,
   Edit3,
-  ExternalLink,
   Loader2,
-  LayoutGrid,
+  Search,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import {
@@ -23,15 +21,35 @@ import {
 } from '../services/boardService';
 import type { Board } from '../types';
 import { CloudStatusBadge } from '../components/CloudStatusBadge';
+import { BrandMark } from '../components/BrandMark';
+import { ThemeQuickControls } from '../components/ThemeQuickControls';
+import { BoardThumbnail } from '../components/BoardThumbnail';
+
+function formatRelativeTime(isoDate: string): string {
+  const timestamp = new Date(isoDate).getTime();
+  if (Number.isNaN(timestamp)) return 'recently';
+  const diffSec = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+  if (diffSec < 60) return 'edited just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `edited ${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `edited ${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 30) return `edited ${diffDay}d ago`;
+  return `edited ${new Date(isoDate).toLocaleDateString()}`;
+}
 
 export default function DashboardPage() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+  const newInputRef = useRef<HTMLInputElement | null>(null);
 
   const [boards, setBoards] = useState<Board[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'updated' | 'title'>('updated');
   const [showArchived, setShowArchived] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
@@ -54,8 +72,8 @@ export default function DashboardPage() {
     loadBoards();
   }, []);
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreate = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     const title = newTitle.trim() || 'Untitled Board';
     setCreating(true);
     setError(null);
@@ -121,7 +139,19 @@ export default function DashboardPage() {
     navigate('/login');
   };
 
-  const visibleBoards = boards.filter((b) => Boolean(b.archived) === showArchived);
+  const visibleBoards = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return boards
+      .filter((b) => Boolean(b.archived) === showArchived)
+      .filter((b) => !query || b.title.toLowerCase().includes(query))
+      .sort((a, b) => {
+        if (sortBy === 'title') {
+          return a.title.localeCompare(b.title);
+        }
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      });
+  }, [boards, showArchived, searchQuery, sortBy]);
+
   const initials = user?.displayName
     ? user.displayName
         .split(' ')
@@ -133,31 +163,32 @@ export default function DashboardPage() {
 
   return (
     <div className="dashboard-layout">
-      <header className="sketchflow-header">
-        <div className="sketchflow-left-section">
-          <div className="sketchflow-brand">
-            <div className="sketchflow-logo-icon">
-              <Sparkles size={18} />
-            </div>
+      <header className="sf-topbar">
+        <div className="sf-topbar-left">
+          <div className="sf-brand" style={{ cursor: 'default' }}>
+            <BrandMark size={20} />
             <span>SketchFlow</span>
           </div>
-          <div className="sketchflow-divider" />
-          <span className="dashboard-subtitle">My Workspace</span>
+          <div className="sf-divider" />
+          <span style={{ color: 'var(--ink-muted)', fontSize: 13 }}>
+            Workspace
+          </span>
         </div>
 
-        <div className="sketchflow-right-section">
+        <div className="sf-topbar-right">
           <CloudStatusBadge />
-          <div className="sketchflow-user-badge" title={user?.email}>
-            <div className="sketchflow-avatar">{initials}</div>
+          <ThemeQuickControls showEditorOptions={false} />
+          <div className="sf-user-badge" title={user?.email}>
+            <div className="sf-avatar">{initials}</div>
             <span>{user?.displayName || 'User'}</span>
           </div>
           <button
             type="button"
-            className="sketchflow-btn"
+            className="sf-btn"
             onClick={handleLogout}
             title="Sign Out"
           >
-            <LogOut size={15} />
+            <LogOut size={16} strokeWidth={1.5} />
             <span>Sign out</span>
           </button>
         </div>
@@ -167,38 +198,67 @@ export default function DashboardPage() {
         <div className="dashboard-toolbar">
           <form onSubmit={handleCreate} className="create-board-form">
             <input
+              ref={newInputRef}
               type="text"
-              className="create-board-input"
-              placeholder="New board title (e.g. System Architecture)..."
+              className="sf-input"
+              placeholder="New board title..."
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
               disabled={creating}
             />
             <button
               type="submit"
-              className="sketchflow-btn sketchflow-btn-primary"
+              className="sf-btn sf-btn-primary"
               disabled={creating}
             >
-              {creating ? <Loader2 size={15} className="spin" /> : <Plus size={15} />}
-              <span>New Board</span>
+              {creating ? (
+                <Loader2 size={16} strokeWidth={1.5} className="spin" />
+              ) : (
+                <Plus size={16} strokeWidth={1.5} />
+              )}
+              <span>New board</span>
             </button>
           </form>
 
-          <div className="dashboard-tabs">
-            <button
-              type="button"
-              className={`dashboard-tab ${!showArchived ? 'active' : ''}`}
-              onClick={() => setShowArchived(false)}
+          <div className="dashboard-filters">
+            <div className="search-input-wrap">
+              <Search size={16} strokeWidth={1.5} className="search-input-icon" />
+              <input
+                type="search"
+                className="sf-input"
+                placeholder="Search title..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                aria-label="Search boards by title"
+              />
+            </div>
+
+            <select
+              className="sf-select"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'updated' | 'title')}
+              aria-label="Sort boards"
             >
-              Active ({boards.filter((b) => !b.archived).length})
-            </button>
-            <button
-              type="button"
-              className={`dashboard-tab ${showArchived ? 'active' : ''}`}
-              onClick={() => setShowArchived(true)}
-            >
-              Archived ({boards.filter((b) => b.archived).length})
-            </button>
+              <option value="updated">Last edited</option>
+              <option value="title">Title</option>
+            </select>
+
+            <div className="dashboard-tabs">
+              <button
+                type="button"
+                className={`dashboard-tab ${!showArchived ? 'active' : ''}`}
+                onClick={() => setShowArchived(false)}
+              >
+                Active ({boards.filter((b) => !b.archived).length})
+              </button>
+              <button
+                type="button"
+                className={`dashboard-tab ${showArchived ? 'active' : ''}`}
+                onClick={() => setShowArchived(true)}
+              >
+                Archived ({boards.filter((b) => b.archived).length})
+              </button>
+            </div>
           </div>
         </div>
 
@@ -210,18 +270,29 @@ export default function DashboardPage() {
 
         {loading ? (
           <div className="dashboard-empty">
-            <Loader2 size={28} className="spin" />
-            <p>Loading your boards from Neon PostgreSQL...</p>
+            <Loader2 size={16} strokeWidth={1.5} className="spin" />
+            <p>Loading boards...</p>
           </div>
         ) : visibleBoards.length === 0 ? (
           <div className="dashboard-empty">
-            <LayoutGrid size={40} color="#94a3b8" />
-            <h3>{showArchived ? 'No archived boards' : 'No boards yet'}</h3>
             <p>
-              {showArchived
-                ? 'Boards you archive will appear here.'
-                : 'Create your first board above to start sketching!'}
+              {searchQuery
+                ? 'No boards match that title.'
+                : showArchived
+                ? 'No archived boards.'
+                : 'No boards in this workspace yet.'}
             </p>
+            {!showArchived && !searchQuery && (
+              <button
+                type="button"
+                className="sf-btn sf-btn-primary"
+                onClick={() => handleCreate()}
+                disabled={creating}
+              >
+                <Plus size={16} strokeWidth={1.5} />
+                <span>New board</span>
+              </button>
+            )}
           </div>
         ) : (
           <div className="boards-grid">
@@ -230,11 +301,17 @@ export default function DashboardPage() {
                 <div
                   className="board-card-preview"
                   onClick={() => navigate(`/board/${board.id}`)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      navigate(`/board/${board.id}`);
+                    }
+                  }}
+                  aria-label={`Open ${board.title}`}
                 >
-                  <Sparkles size={26} color="#6366f1" style={{ opacity: 0.5 }} />
-                  <span className="board-open-hint">
-                    Open Canvas <ExternalLink size={13} />
-                  </span>
+                  <BoardThumbnail boardId={board.id} sceneJson={board.sceneJson} />
                 </div>
 
                 <div className="board-card-body">
@@ -262,69 +339,68 @@ export default function DashboardPage() {
                       </h3>
                     )}
 
-                    <span className={`role-badge role-${board.userRole.toLowerCase()}`}>
-                      {board.userRole}
+                    <span className="role-text">
+                      {board.userRole.toLowerCase()}
                     </span>
                   </div>
 
-                  <div className="board-card-meta">
-                    <span>v{board.version}</span>
-                    <span>•</span>
-                    <span>
-                      Updated {new Date(board.updatedAt).toLocaleDateString()}
+                  <div className="board-card-footer">
+                    <span className="board-card-meta">
+                      {formatRelativeTime(board.updatedAt)}
                     </span>
-                  </div>
 
-                  {board.userRole === 'OWNER' && (
-                    <div className="board-card-actions">
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title="Rename"
-                        onClick={() => {
-                          setEditingId(board.id);
-                          setEditTitle(board.title);
-                        }}
-                      >
-                        <Edit3 size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title="Duplicate"
-                        onClick={() => handleDuplicate(board.id)}
-                      >
-                        <Copy size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title={board.archived ? 'Restore' : 'Archive'}
-                        onClick={() => handleToggleArchive(board)}
-                      >
-                        {board.archived ? (
-                          <ArchiveRestore size={14} />
-                        ) : (
-                          <Archive size={14} />
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-btn icon-btn-danger"
-                        title="Delete"
-                        onClick={() => handleDelete(board)}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  )}
+                    {board.userRole === 'OWNER' && (
+                      <div className="board-card-actions">
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="Rename"
+                          onClick={() => {
+                            setEditingId(board.id);
+                            setEditTitle(board.title);
+                          }}
+                        >
+                          <Edit3 size={16} strokeWidth={1.5} />
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="Duplicate"
+                          onClick={() => handleDuplicate(board.id)}
+                        >
+                          <Copy size={16} strokeWidth={1.5} />
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title={board.archived ? 'Restore' : 'Archive'}
+                          onClick={() => handleToggleArchive(board)}
+                        >
+                          {board.archived ? (
+                            <ArchiveRestore size={16} strokeWidth={1.5} />
+                          ) : (
+                            <Archive size={16} strokeWidth={1.5} />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-btn icon-btn-danger"
+                          title="Delete"
+                          onClick={() => handleDelete(board)}
+                        >
+                          <Trash2 size={16} strokeWidth={1.5} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         )}
       </main>
+
+      <footer className="sf-footer">Built with Excalidraw</footer>
     </div>
   );
 }
-

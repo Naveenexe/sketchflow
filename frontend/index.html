@@ -1,10 +1,45 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="paper">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SketchFlow — Collaborative Whiteboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=Geist:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      (function () {
+        var VALID = ['paper', 'sand', 'sage', 'slate', 'clay', 'mist', 'graphite', 'midnight', 'forest', 'ember'];
+        var preset = 'paper';
+        var customCanvas = null;
+        var customPen = null;
+        try {
+          var raw = localStorage.getItem('sketchflow_theme');
+          if (raw) {
+            var parsed = JSON.parse(raw);
+            if (parsed && VALID.indexOf(parsed.presetId) !== -1) {
+              preset = parsed.presetId;
+            }
+            if (parsed && typeof parsed.customCanvas === 'string') {
+              customCanvas = parsed.customCanvas;
+            }
+            if (parsed && typeof parsed.customPen === 'string') {
+              customPen = parsed.customPen;
+            }
+          } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            preset = 'graphite';
+          }
+        } catch (e) {}
+        var root = document.documentElement;
+        root.setAttribute('data-theme', preset);
+        if (customCanvas) root.style.setProperty('--canvas', customCanvas);
+        if (customPen) root.style.setProperty('--pen', customPen);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

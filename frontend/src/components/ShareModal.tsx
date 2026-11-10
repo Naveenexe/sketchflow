@@ -40,7 +40,6 @@ export function ShareModal({
   const [role, setRole] = useState<BoardRole>('EDITOR');
   const [inviting, setInviting] = useState(false);
 
-  // Share link form
   const [linkPerm, setLinkPerm] = useState<BoardRole>('VIEWER');
   const [expiryDays, setExpiryDays] = useState<string>('7');
   const [creatingLink, setCreatingLink] = useState(false);
@@ -50,26 +49,25 @@ export function ShareModal({
   const [copied, setCopied] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  const loadAll = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const membersList = await listBoardMembers(boardId);
-      setMembers(membersList);
-      if (isOwner) {
-        const linksList = await listShareLinks(boardId);
-        setLinks(linksList);
-      }
-    } catch {
-      setError('Could not load sharing settings.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const loadAll = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const membersList = await listBoardMembers(boardId);
+        setMembers(membersList);
+        if (isOwner) {
+          const linksList = await listShareLinks(boardId);
+          setLinks(linksList);
+        }
+      } catch {
+        setError('Could not load sharing settings.');
+      } finally {
+        setLoading(false);
+      }
+    };
     loadAll();
-  }, [boardId]);
+  }, [boardId, isOwner]);
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -164,13 +162,18 @@ export function ShareModal({
             <h2>Share &ldquo;{boardTitle}&rdquo;</h2>
             <p>Manage collaborators and revocable share links.</p>
           </div>
-          <button type="button" className="icon-btn" onClick={onClose}>
-            <X size={18} />
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={onClose}
+            aria-label="Close modal"
+          >
+            <X size={16} strokeWidth={1.5} />
           </button>
         </div>
 
         {isOwner && (
-          <div className="dashboard-tabs" style={{ marginBottom: 16 }}>
+          <div className="dashboard-tabs">
             <button
               type="button"
               className={`dashboard-tab ${activeTab === 'members' ? 'active' : ''}`}
@@ -214,13 +217,13 @@ export function ShareModal({
                 </select>
                 <button
                   type="submit"
-                  className="sketchflow-btn sketchflow-btn-primary"
+                  className="sf-btn sf-btn-primary"
                   disabled={inviting}
                 >
                   {inviting ? (
-                    <Loader2 size={15} className="spin" />
+                    <Loader2 size={16} strokeWidth={1.5} className="spin" />
                   ) : (
-                    <UserPlus size={15} />
+                    <UserPlus size={16} strokeWidth={1.5} />
                   )}
                   <span>Invite</span>
                 </button>
@@ -230,14 +233,14 @@ export function ShareModal({
             <div className="share-members-list">
               <h4>Board Access</h4>
               {loading ? (
-                <div style={{ padding: 16, textAlign: 'center', color: '#64748b' }}>
-                  <Loader2 size={18} className="spin" />
+                <div style={{ padding: 16, textAlign: 'center', color: 'var(--ink-muted)' }}>
+                  <Loader2 size={16} strokeWidth={1.5} className="spin" />
                 </div>
               ) : (
                 members.map((m) => (
                   <div key={m.userId} className="share-member-row">
                     <div className="share-member-info">
-                      <div className="sketchflow-avatar">
+                      <div className="sf-avatar">
                         {m.displayName.slice(0, 2).toUpperCase()}
                       </div>
                       <div>
@@ -246,9 +249,7 @@ export function ShareModal({
                       </div>
                     </div>
                     <div className="share-member-actions">
-                      <span className={`role-badge role-${m.role.toLowerCase()}`}>
-                        {m.role}
-                      </span>
+                      <span className="role-text">{m.role.toLowerCase()}</span>
                       {isOwner && m.role !== 'OWNER' && (
                         <button
                           type="button"
@@ -256,7 +257,7 @@ export function ShareModal({
                           onClick={() => handleRemove(m.userId)}
                           title="Remove access"
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={16} strokeWidth={1.5} />
                         </button>
                       )}
                     </div>
@@ -289,13 +290,13 @@ export function ShareModal({
               </select>
               <button
                 type="submit"
-                className="sketchflow-btn sketchflow-btn-primary"
+                className="sf-btn sf-btn-primary"
                 disabled={creatingLink}
               >
                 {creatingLink ? (
-                  <Loader2 size={15} className="spin" />
+                  <Loader2 size={16} strokeWidth={1.5} className="spin" />
                 ) : (
-                  <Link2 size={15} />
+                  <Link2 size={16} strokeWidth={1.5} />
                 )}
                 <span>Create</span>
               </button>
@@ -310,10 +311,14 @@ export function ShareModal({
                   <input type="text" readOnly value={newShareUrl} />
                   <button
                     type="button"
-                    className="sketchflow-btn sketchflow-btn-primary"
+                    className="sf-btn sf-btn-primary"
                     onClick={handleCopyShareUrl}
                   >
-                    {copiedLink ? <Check size={14} /> : <Copy size={14} />}
+                    {copiedLink ? (
+                      <Check size={16} strokeWidth={1.5} />
+                    ) : (
+                      <Copy size={16} strokeWidth={1.5} />
+                    )}
                     <span>{copiedLink ? 'Copied' : 'Copy'}</span>
                   </button>
                 </div>
@@ -323,25 +328,17 @@ export function ShareModal({
             <div className="share-members-list">
               <h4>Active Share Links</h4>
               {links.length === 0 ? (
-                <p style={{ fontSize: 13, color: '#64748b', margin: '8px 0' }}>
+                <p style={{ fontSize: 13, color: 'var(--ink-muted)', margin: '4px 0' }}>
                   No active share links. Create one above.
                 </p>
               ) : (
                 links.map((link) => (
                   <div key={link.id} className="share-member-row">
-                    <div>
-                      <span
-                        className={`role-badge role-${link.permission.toLowerCase()}`}
-                      >
-                        {link.permission}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span className="role-text">
+                        {link.permission.toLowerCase()}
                       </span>
-                      <span
-                        style={{
-                          marginLeft: 8,
-                          fontSize: 12,
-                          color: '#64748b',
-                        }}
-                      >
+                      <span style={{ fontSize: 12, color: 'var(--ink-muted)' }}>
                         {link.expiresAt
                           ? `Expires ${new Date(link.expiresAt).toLocaleDateString()}`
                           : 'Never expires'}
@@ -349,16 +346,10 @@ export function ShareModal({
                     </div>
                     <button
                       type="button"
-                      className="sketchflow-btn"
-                      style={{
-                        padding: '4px 10px',
-                        fontSize: 12,
-                        color: '#dc2626',
-                        borderColor: '#fecaca',
-                      }}
+                      className="sf-btn sf-btn-danger"
                       onClick={() => handleRevokeLink(link.id)}
                     >
-                      <ShieldBan size={13} />
+                      <ShieldBan size={16} strokeWidth={1.5} />
                       <span>Revoke</span>
                     </button>
                   </div>
@@ -371,11 +362,15 @@ export function ShareModal({
         <div className="modal-footer">
           <button
             type="button"
-            className="sketchflow-btn"
+            className="sf-btn"
             onClick={handleCopyBoardLink}
           >
-            {copied ? <Check size={14} color="#10b981" /> : <Copy size={14} />}
-            <span>{copied ? 'Board URL Copied!' : 'Copy Board URL'}</span>
+            {copied ? (
+              <Check size={16} strokeWidth={1.5} />
+            ) : (
+              <Copy size={16} strokeWidth={1.5} />
+            )}
+            <span>{copied ? 'Board URL Copied' : 'Copy Board URL'}</span>
           </button>
         </div>
       </div>

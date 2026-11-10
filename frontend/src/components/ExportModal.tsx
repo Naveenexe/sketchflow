@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { exportToBlob, exportToSvg } from '@excalidraw/excalidraw';
 import { X, Image, FileCode, FileJson, Upload, AlertCircle } from 'lucide-react';
+import { THEME_MAP, useThemeStore } from '../store/themeStore';
 
 interface ExportModalProps {
   boardTitle: string;
@@ -14,7 +15,7 @@ interface ExportModalProps {
   onClose: () => void;
 }
 
-const MAX_IMPORT_BYTES = 5 * 1024 * 1024; // 5 MB limit per SRS 3.6 & 4.3
+const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 
 function sanitizeFilename(title: string) {
   return (title || 'sketchflow-board')
@@ -45,6 +46,8 @@ export function ExportModal({
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
+  const presetId = useThemeStore((s) => s.presetId);
+  const currentPreset = THEME_MAP[presetId];
   const safeName = sanitizeFilename(boardTitle);
 
   const handleExportPng = async () => {
@@ -78,7 +81,10 @@ export function ExportModal({
     try {
       const svg = await exportToSvg({
         elements: data.elements as Parameters<typeof exportToSvg>[0]['elements'],
-        appState: data.appState as Parameters<typeof exportToSvg>[0]['appState'],
+        appState: {
+          ...data.appState,
+          exportWithDarkMode: false,
+        } as Parameters<typeof exportToSvg>[0]['appState'],
         files: data.files as Parameters<typeof exportToSvg>[0]['files'],
       });
       const serializer = new XMLSerializer();
@@ -102,7 +108,8 @@ export function ExportModal({
       source: 'sketchflow',
       elements: data.elements,
       appState: {
-        viewBackgroundColor: data.appState?.viewBackgroundColor || '#ffffff',
+        viewBackgroundColor:
+          data.appState?.viewBackgroundColor || currentPreset.canvas,
       },
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -140,7 +147,9 @@ export function ExportModal({
       onImportScene(parsed.elements, appState);
       onClose();
     } catch {
-      setError('Invalid JSON file. Please choose a valid Excalidraw/SketchFlow JSON backup.');
+      setError(
+        'Invalid JSON file. Please choose a valid Excalidraw or SketchFlow JSON backup.'
+      );
     }
   };
 
@@ -152,14 +161,19 @@ export function ExportModal({
             <h2>Export &amp; Backup</h2>
             <p>Download your board or restore from a JSON backup.</p>
           </div>
-          <button type="button" className="icon-btn" onClick={onClose}>
-            <X size={18} />
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={onClose}
+            aria-label="Close modal"
+          >
+            <X size={16} strokeWidth={1.5} />
           </button>
         </div>
 
         {error && (
-          <div className="auth-error" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <AlertCircle size={15} />
+          <div className="auth-error">
+            <AlertCircle size={16} strokeWidth={1.5} />
             <span>{error}</span>
           </div>
         )}
@@ -171,7 +185,7 @@ export function ExportModal({
             onClick={handleExportPng}
             disabled={exporting}
           >
-            <Image size={22} color="#6366f1" />
+            <Image size={16} strokeWidth={1.5} />
             <div>
               <div className="export-option-title">PNG Image</div>
               <div className="export-option-desc">High-resolution raster image</div>
@@ -184,7 +198,7 @@ export function ExportModal({
             onClick={handleExportSvg}
             disabled={exporting}
           >
-            <FileCode size={22} color="#8b5cf6" />
+            <FileCode size={16} strokeWidth={1.5} />
             <div>
               <div className="export-option-title">SVG Vector</div>
               <div className="export-option-desc">Scalable vector graphic</div>
@@ -197,7 +211,7 @@ export function ExportModal({
             onClick={handleExportJson}
             disabled={exporting}
           >
-            <FileJson size={22} color="#10b981" />
+            <FileJson size={16} strokeWidth={1.5} />
             <div>
               <div className="export-option-title">Portable JSON Backup</div>
               <div className="export-option-desc">Save raw scene data locally</div>
@@ -219,7 +233,7 @@ export function ExportModal({
                 onClick={() => fileInputRef.current?.click()}
                 disabled={exporting}
               >
-                <Upload size={22} color="#f59e0b" />
+                <Upload size={16} strokeWidth={1.5} />
                 <div>
                   <div className="export-option-title">Import JSON Backup</div>
                   <div className="export-option-desc">Validated up to 5 MB</div>

@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Excalidraw } from '@excalidraw/excalidraw';
+import { Excalidraw, MainMenu } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
-import { Sparkles, Lock, Download, Loader2, ShieldAlert, LogIn } from 'lucide-react';
+import { Lock, Download, Loader2, ShieldAlert, LogIn, Palette } from 'lucide-react';
 import { resolveShareLink } from '../services/boardService';
 import { useAuthStore } from '../store/authStore';
+import { THEME_MAP, useThemeStore } from '../store/themeStore';
 import type { Board } from '../types';
 import { ExportModal } from '../components/ExportModal';
+import { BrandMark } from '../components/BrandMark';
+import { ThemeQuickControls } from '../components/ThemeQuickControls';
+import { ThemePickerModal } from '../components/ThemePickerModal';
 
 type ExcalidrawProps = Parameters<typeof Excalidraw>[0];
 type InitialDataState = Exclude<
@@ -17,21 +21,39 @@ type ExcalidrawImperativeAPI = Parameters<
   NonNullable<ExcalidrawProps['excalidrawAPI']>
 >[0];
 
-function parseSceneSafe(raw: string | null | undefined): InitialDataState {
-  if (!raw) return { elements: [], appState: { viewBackgroundColor: '#ffffff' } };
+function parseSceneSafe(
+  raw: string | null | undefined,
+  fallbackCanvas: string
+): InitialDataState {
+  if (!raw) {
+    return { elements: [], appState: { viewBackgroundColor: fallbackCanvas } };
+  }
   try {
     const parsed = JSON.parse(raw) as {
       elements?: unknown[];
       appState?: Record<string, unknown>;
     };
+    const elements = Array.isArray(parsed.elements) ? parsed.elements : [];
     const appState = { ...(parsed.appState || {}) };
     delete appState.collaborators;
+
+    const savedBg =
+      typeof appState.viewBackgroundColor === 'string'
+        ? appState.viewBackgroundColor
+        : undefined;
+    const isEmptyDefaultBg =
+      elements.length === 0 && (!savedBg || savedBg.toLowerCase() === '#ffffff');
+
     return {
-      elements: Array.isArray(parsed.elements) ? parsed.elements : [],
-      appState,
+      elements,
+      appState: {
+        ...appState,
+        viewBackgroundColor:
+          isEmptyDefaultBg || !savedBg ? fallbackCanvas : savedBg,
+      },
     } as InitialDataState;
   } catch {
-    return { elements: [], appState: { viewBackgroundColor: '#ffffff' } };
+    return { elements: [], appState: { viewBackgroundColor: fallbackCanvas } };
   }
 }
 
@@ -40,10 +62,17 @@ export default function SharedBoardPage() {
   const navigate = useNavigate();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
+  const presetId = useThemeStore((s) => s.presetId);
+  const customCanvas = useThemeStore((s) => s.customCanvas);
+  const canvasStyle = useThemeStore((s) => s.canvasStyle);
+  const currentPreset = THEME_MAP[presetId];
+  const activeCanvas = customCanvas || currentPreset.canvas;
+
   const [board, setBoard] = useState<Board | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showThemeModal, setShowThemeModal] = useState(false);
 
   const excalidrawAPIRef = useRef<ExcalidrawImperativeAPI | null>(null);
 
@@ -83,7 +112,7 @@ export default function SharedBoardPage() {
   if (loading) {
     return (
       <div className="dashboard-empty" style={{ height: '100vh' }}>
-        <Loader2 size={32} className="spin" />
+        <Loader2 size={16} strokeWidth={1.5} className="spin" />
         <p>Opening shared board...</p>
       </div>
     );
@@ -92,66 +121,70 @@ export default function SharedBoardPage() {
   if (error || !board) {
     return (
       <div className="dashboard-empty" style={{ height: '100vh' }}>
-        <ShieldAlert size={44} color="#ef4444" />
+        <ShieldAlert size={20} strokeWidth={1.5} color="var(--danger)" />
         <h3>Share link unavailable</h3>
         <p>{error}</p>
         <button
           type="button"
-          className="sketchflow-btn sketchflow-btn-primary"
+          className="sf-btn sf-btn-primary"
           onClick={() => navigate('/login')}
         >
-          <LogIn size={15} />
+          <LogIn size={16} strokeWidth={1.5} />
           <span>Sign in to SketchFlow</span>
         </button>
       </div>
     );
   }
 
-  const initialScene = parseSceneSafe(board.sceneJson);
+  const initialScene = parseSceneSafe(board.sceneJson, activeCanvas);
 
   return (
-    <div className="sketchflow-container">
-      <header className="sketchflow-header">
-        <div className="sketchflow-left-section">
-          <div
-            className="sketchflow-brand"
+    <div
+      className="sketchflow-container sketchflow-editor-shell"
+      data-canvas-style={canvasStyle}
+    >
+      <header className="sf-topbar">
+        <div className="sf-topbar-left">
+          <button
+            type="button"
+            className="sf-brand"
             onClick={() => navigate(isAuthenticated ? '/dashboard' : '/login')}
           >
-            <div className="sketchflow-logo-icon">
-              <Sparkles size={18} />
-            </div>
+            <BrandMark size={20} />
             <span>SketchFlow</span>
-          </div>
+          </button>
 
-          <div className="sketchflow-divider" />
+          <div className="sf-divider" />
 
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#334155' }}>
+          <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink)' }}>
             {board.title}
           </span>
 
-          <div className="sketchflow-save-indicator">
-            <Lock size={12} />
-            <span>Public Read-Only Link</span>
+          <div className="status-indicator">
+            <Lock size={16} strokeWidth={1.5} />
+            <span>Public read-only</span>
           </div>
         </div>
 
-        <div className="sketchflow-right-section">
+        <div className="sf-topbar-right">
+          <ThemeQuickControls showEditorOptions={false} />
+
           <button
             type="button"
-            className="sketchflow-btn"
+            className="sf-btn"
             onClick={() => setShowExportModal(true)}
           >
-            <Download size={15} />
+            <Download size={16} strokeWidth={1.5} />
             <span>Export</span>
           </button>
 
           {!isAuthenticated && (
             <button
               type="button"
-              className="sketchflow-btn sketchflow-btn-primary"
+              className="sf-btn sf-btn-primary"
               onClick={() => navigate('/login')}
             >
-              <LogIn size={15} />
+              <LogIn size={16} strokeWidth={1.5} />
               <span>Sign in</span>
             </button>
           )}
@@ -164,17 +197,50 @@ export default function SharedBoardPage() {
             excalidrawAPIRef.current = api;
           }}
           name={board.title}
+          theme={currentPreset.mode}
+          gridModeEnabled={canvasStyle === 'dots'}
           initialData={initialScene}
           viewModeEnabled={true}
           UIOptions={{
             canvasActions: {
               saveToActiveFile: false,
               loadScene: false,
-              toggleTheme: true,
+              toggleTheme: false,
+            },
+            tools: {
+              image: false,
             },
           }}
-        />
+        >
+          <MainMenu>
+            <MainMenu.Item
+              icon={<Download size={16} strokeWidth={1.5} />}
+              onSelect={() => setShowExportModal(true)}
+            >
+              Export &amp; Backup
+            </MainMenu.Item>
+            <MainMenu.Item
+              icon={<Palette size={16} strokeWidth={1.5} />}
+              onSelect={() => setShowThemeModal(true)}
+            >
+              Appearance
+            </MainMenu.Item>
+            <MainMenu.Separator />
+            <MainMenu.ItemCustom>
+              <div className="excalidraw-credit" style={{ padding: '4px 12px' }}>
+                Built with Excalidraw
+              </div>
+            </MainMenu.ItemCustom>
+          </MainMenu>
+        </Excalidraw>
       </main>
+
+      {showThemeModal && (
+        <ThemePickerModal
+          onClose={() => setShowThemeModal(false)}
+          showEditorOptions={false}
+        />
+      )}
 
       {showExportModal && (
         <ExportModal
