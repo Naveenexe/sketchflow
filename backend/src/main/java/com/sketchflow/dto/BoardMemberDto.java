@@ -36,3 +36,4 @@ public class BoardMemberDto {
     public Instant getJoinedAt() { return joinedAt; }
     public void setJoinedAt(Instant joinedAt) { this.joinedAt = joinedAt; }
 }
+

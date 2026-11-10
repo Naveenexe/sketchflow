@@ -18,6 +18,7 @@ import { useAuthStore } from '../store/authStore';
 import type { Board } from '../types';
 import { useCollaboration, type RemoteCollaborator } from '../hooks/useCollaboration';
 import { ShareModal } from '../components/ShareModal';
+import { ExportModal } from '../components/ExportModal';
 
 type ExcalidrawProps = Parameters<typeof Excalidraw>[0];
 type InitialDataState = Exclude<
@@ -96,6 +97,7 @@ export default function BoardEditorPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'offline'>('saved');
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   const excalidrawAPIRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const isApplyingRemoteRef = useRef(false);
@@ -479,12 +481,8 @@ export default function BoardEditorPage() {
           <button
             type="button"
             className="sketchflow-btn"
-            onClick={() =>
-              alert(
-                'Use the top-left Excalidraw menu (≡) to export PNG, SVG, or JSON.'
-              )
-            }
-            title="Export Board"
+            onClick={() => setShowExportModal(true)}
+            title="Export & Backup Board"
           >
             <Download size={15} />
             <span>Export</span>
@@ -533,6 +531,36 @@ export default function BoardEditorPage() {
           boardTitle={boardTitle}
           isOwner={isOwner}
           onClose={() => setShowShareModal(false)}
+        />
+      )}
+
+      {showExportModal && (
+        <ExportModal
+          boardTitle={boardTitle}
+          canImport={!isViewer}
+          getSceneData={() => {
+            const api = excalidrawAPIRef.current;
+            if (!api) return null;
+            return {
+              elements: api.getSceneElements(),
+              appState: api.getAppState() as unknown as Record<string, unknown>,
+              files: api.getFiles() as unknown as Record<string, unknown>,
+            };
+          }}
+          onImportScene={(elements, appState) => {
+            const api = excalidrawAPIRef.current;
+            if (!api || isViewer) return;
+            api.updateScene({
+              elements: elements as unknown as Parameters<
+                ExcalidrawImperativeAPI['updateScene']
+              >[0]['elements'],
+              appState: appState as unknown as Parameters<
+                ExcalidrawImperativeAPI['updateScene']
+              >[0]['appState'],
+            });
+            handleSceneChange(elements, appState as { viewBackgroundColor?: string });
+          }}
+          onClose={() => setShowExportModal(false)}
         />
       )}
     </div>

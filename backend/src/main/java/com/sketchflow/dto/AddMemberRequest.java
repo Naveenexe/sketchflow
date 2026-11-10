@@ -22,3 +22,4 @@ public class AddMemberRequest {
     public BoardRole getRole() { return role; }
     public void setRole(BoardRole role) { this.role = role; }
 }
+

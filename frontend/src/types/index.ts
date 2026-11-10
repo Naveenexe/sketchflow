@@ -51,3 +51,13 @@ export interface CollabParticipant {
   role: BoardRole;
   color: string;
 }
+
+export interface ShareLink {
+  id: string;
+  boardId: string;
+  token?: string;
+  permission: BoardRole;
+  expiresAt?: string | null;
+  revokedAt?: string | null;
+  createdAt: string;
+}

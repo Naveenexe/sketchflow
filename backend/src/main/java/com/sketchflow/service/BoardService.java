@@ -47,10 +47,13 @@ public class BoardService {
                 .toList();
     }
 
+    private static final int MAX_SCENE_BYTES = 5 * 1024 * 1024; // 5 MB limit per NFR 4.1 & 4.3
+
     @Transactional
     public BoardDto createBoard(UUID userId, CreateBoardRequest request) {
         Board board = new Board(request.getTitle(), userId);
         if (request.getSceneJson() != null && !request.getSceneJson().isBlank()) {
+            validateSceneSize(request.getSceneJson());
             board.setSceneJson(request.getSceneJson());
         } else {
             board.setSceneJson("{\"elements\":[],\"appState\":{\"viewBackgroundColor\":\"#ffffff\"}}");
@@ -142,6 +145,8 @@ public class BoardService {
         if (role == BoardRole.VIEWER) {
             throw new SecurityException("Permission denied: Viewers cannot save scene changes");
         }
+
+        validateSceneSize(sceneJson);
 
         board.setSceneJson(sceneJson);
         board.setVersion(board.getVersion() + 1);
@@ -257,5 +262,11 @@ public class BoardService {
         dto.setUpdatedAt(board.getUpdatedAt());
         dto.setUserRole(role != null ? role.name() : "VIEWER");
         return dto;
+    }
+
+    private void validateSceneSize(String sceneJson) {
+        if (sceneJson != null && sceneJson.length() > MAX_SCENE_BYTES) {
+            throw new IllegalArgumentException("Scene payload exceeds maximum allowed size of 5 MB");
+        }
     }
 }

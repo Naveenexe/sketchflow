@@ -4,6 +4,7 @@ import { useAuthStore } from './store/authStore';
 import AuthPage from './pages/AuthPage';
 import DashboardPage from './pages/DashboardPage';
 import BoardEditorPage from './pages/BoardEditorPage';
+import SharedBoardPage from './pages/SharedBoardPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -43,6 +44,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/share/:token" element={<SharedBoardPage />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </HashRouter>

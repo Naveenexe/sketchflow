@@ -4,6 +4,7 @@ import type {
   BoardMember,
   BoardRole,
   CreateBoardRequest,
+  ShareLink,
   UpdateBoardRequest,
 } from '../types';
 
@@ -80,4 +81,32 @@ export async function removeBoardMember(
   userId: string
 ): Promise<void> {
   await apiClient.delete(`/boards/${boardId}/members/${userId}`);
+}
+
+export async function listShareLinks(boardId: string): Promise<ShareLink[]> {
+  const response = await apiClient.get<ShareLink[]>(
+    `/boards/${boardId}/share-links`
+  );
+  return response.data;
+}
+
+export async function createShareLink(
+  boardId: string,
+  permission: BoardRole,
+  expiresInDays: number | null
+): Promise<ShareLink> {
+  const response = await apiClient.post<ShareLink>(
+    `/boards/${boardId}/share-links`,
+    { permission, expiresInDays }
+  );
+  return response.data;
+}
+
+export async function revokeShareLink(linkId: string): Promise<void> {
+  await apiClient.delete(`/share-links/${linkId}`);
+}
+
+export async function resolveShareLink(token: string): Promise<Board> {
+  const response = await apiClient.get<Board>(`/share-links/${token}`);
+  return response.data;
 }
