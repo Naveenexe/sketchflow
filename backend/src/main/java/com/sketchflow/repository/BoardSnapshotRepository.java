@@ -11,3 +11,4 @@ import java.util.UUID;
 public interface BoardSnapshotRepository extends JpaRepository<BoardSnapshot, UUID> {
     List<BoardSnapshot> findByBoardIdOrderByVersionDesc(UUID boardId);
 }
+

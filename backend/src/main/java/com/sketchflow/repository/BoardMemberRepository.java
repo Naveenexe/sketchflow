@@ -15,3 +15,4 @@ public interface BoardMemberRepository extends JpaRepository<BoardMember, UUID> 
     Optional<BoardMember> findByBoardIdAndUserId(UUID boardId, UUID userId);
     void deleteByBoardIdAndUserId(UUID boardId, UUID userId);
 }
+

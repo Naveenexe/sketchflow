@@ -4,6 +4,7 @@ public class UpdateBoardRequest {
 
     private String title;
     private String thumbnailUrl;
+    private Boolean archived;
 
     public UpdateBoardRequest() {}
 
@@ -12,4 +13,7 @@ public class UpdateBoardRequest {
 
     public String getThumbnailUrl() { return thumbnailUrl; }
     public void setThumbnailUrl(String thumbnailUrl) { this.thumbnailUrl = thumbnailUrl; }
+
+    public Boolean getArchived() { return archived; }
+    public void setArchived(Boolean archived) { this.archived = archived; }
 }

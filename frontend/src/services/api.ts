@@ -8,7 +8,7 @@ export const WS_BASE_URL =
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 65000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -37,3 +37,4 @@ export async function checkBackendHealth(): Promise<HealthResponse> {
   const response = await apiClient.get<HealthResponse>('/health');
   return response.data;
 }
+

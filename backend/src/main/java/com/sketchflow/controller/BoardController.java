@@ -66,6 +66,15 @@ public class BoardController {
         return ResponseEntity.ok(Map.of("message", "Board deleted successfully"));
     }
 
+    @PostMapping("/{boardId}/duplicate")
+    public ResponseEntity<BoardDto> duplicateBoard(
+            @PathVariable UUID boardId,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        BoardDto copy = boardService.duplicateBoard(boardId, principal.getId());
+        return ResponseEntity.status(HttpStatus.CREATED).body(copy);
+    }
+
     @GetMapping("/{boardId}/scene")
     public ResponseEntity<Map<String, String>> getScene(
             @PathVariable UUID boardId,
@@ -85,3 +94,4 @@ public class BoardController {
         return ResponseEntity.ok(updated);
     }
 }
+

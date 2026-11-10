@@ -50,7 +50,6 @@ public class BoardService {
         }
         board = boardRepository.save(board);
 
-        // Also add owner to members
         boardMemberRepository.save(new BoardMember(board.getId(), userId, BoardRole.OWNER));
 
         return mapToDto(board, BoardRole.OWNER);
@@ -70,8 +69,8 @@ public class BoardService {
                 .orElseThrow(() -> new IllegalArgumentException("Board not found"));
 
         BoardRole role = resolveRole(board, userId);
-        if (role != BoardRole.OWNER && role != BoardRole.EDITOR) {
-            throw new SecurityException("Permission denied: You cannot edit this board");
+        if (role != BoardRole.OWNER) {
+            throw new SecurityException("Permission denied: Only the board owner can rename or archive this board");
         }
 
         if (request.getTitle() != null && !request.getTitle().isBlank()) {
@@ -80,9 +79,32 @@ public class BoardService {
         if (request.getThumbnailUrl() != null) {
             board.setThumbnailUrl(request.getThumbnailUrl());
         }
+        if (request.getArchived() != null) {
+            board.setArchived(request.getArchived());
+        }
 
         board = boardRepository.save(board);
         return mapToDto(board, role);
+    }
+
+    @Transactional
+    public BoardDto duplicateBoard(UUID boardId, UUID userId) {
+        Board source = boardRepository.findById(boardId)
+                .orElseThrow(() -> new IllegalArgumentException("Board not found"));
+
+        BoardRole role = resolveRole(source, userId);
+        if (role != BoardRole.OWNER) {
+            throw new SecurityException("Permission denied: Only the board owner can duplicate this board");
+        }
+
+        Board copy = new Board(source.getTitle() + " (Copy)", userId);
+        copy.setSceneJson(source.getSceneJson());
+        copy.setThumbnailUrl(source.getThumbnailUrl());
+        copy = boardRepository.save(copy);
+
+        boardMemberRepository.save(new BoardMember(copy.getId(), userId, BoardRole.OWNER));
+
+        return mapToDto(copy, BoardRole.OWNER);
     }
 
     @Transactional
@@ -90,7 +112,7 @@ public class BoardService {
         Board board = boardRepository.findById(boardId)
                 .orElseThrow(() -> new IllegalArgumentException("Board not found"));
 
-        if (!board.getOwnerId().equals(userId)) {
+        if (board.getOwnerId() == null || !board.getOwnerId().equals(userId)) {
             throw new SecurityException("Permission denied: Only the board owner can delete this board");
         }
 
@@ -100,7 +122,7 @@ public class BoardService {
     public String getBoardScene(UUID boardId, UUID userId) {
         Board board = boardRepository.findById(boardId)
                 .orElseThrow(() -> new IllegalArgumentException("Board not found"));
-        resolveRole(board, userId); // verify access
+        resolveRole(board, userId);
         return board.getSceneJson();
     }
 
@@ -118,7 +140,6 @@ public class BoardService {
         board.setVersion(board.getVersion() + 1);
         board = boardRepository.save(board);
 
-        // Periodically take snapshot
         if (board.getVersion() % 5 == 0) {
             boardSnapshotRepository.save(new BoardSnapshot(board.getId(), board.getVersion(), sceneJson, userId));
         }
@@ -147,6 +168,7 @@ public class BoardService {
         dto.setSceneJson(board.getSceneJson());
         dto.setThumbnailUrl(board.getThumbnailUrl());
         dto.setVersion(board.getVersion());
+        dto.setArchived(board.isArchived());
         dto.setCreatedAt(board.getCreatedAt());
         dto.setUpdatedAt(board.getUpdatedAt());
         dto.setUserRole(role != null ? role.name() : "VIEWER");

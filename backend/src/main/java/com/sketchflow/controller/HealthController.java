@@ -44,3 +44,4 @@ public class HealthController {
         return ResponseEntity.ok(health);
     }
 }
+

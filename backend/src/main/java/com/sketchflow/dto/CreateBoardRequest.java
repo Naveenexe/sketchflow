@@ -19,3 +19,4 @@ public class CreateBoardRequest {
     public String getSceneJson() { return sceneJson; }
     public void setSceneJson(String sceneJson) { this.sceneJson = sceneJson; }
 }
+

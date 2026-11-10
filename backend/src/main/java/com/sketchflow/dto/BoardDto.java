@@ -11,6 +11,7 @@ public class BoardDto {
     private String sceneJson;
     private String thumbnailUrl;
     private Integer version;
+    private boolean archived;
     private Instant createdAt;
     private Instant updatedAt;
     private String userRole; // OWNER, EDITOR, VIEWER
@@ -35,6 +36,9 @@ public class BoardDto {
     public Integer getVersion() { return version; }
     public void setVersion(Integer version) { this.version = version; }
 
+    public boolean isArchived() { return archived; }
+    public void setArchived(boolean archived) { this.archived = archived; }
+
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 
@@ -44,3 +48,4 @@ public class BoardDto {
     public String getUserRole() { return userRole; }
     public void setUserRole(String userRole) { this.userRole = userRole; }
 }
+

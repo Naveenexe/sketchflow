@@ -13,3 +13,4 @@ public interface ShareLinkRepository extends JpaRepository<ShareLink, UUID> {
     Optional<ShareLink> findByTokenHash(String tokenHash);
     List<ShareLink> findByBoardId(UUID boardId);
 }
+

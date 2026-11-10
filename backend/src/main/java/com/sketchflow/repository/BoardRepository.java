@@ -21,3 +21,4 @@ public interface BoardRepository extends JpaRepository<Board, UUID> {
     """)
     List<Board> findAccessibleBoards(@Param("userId") UUID userId);
 }
+

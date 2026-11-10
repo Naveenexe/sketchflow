@@ -103,3 +103,4 @@ public class CollabWebSocketHandler extends TextWebSocketHandler {
         log.info("WebSocket closed: session id {}", session.getId());
     }
 }
+

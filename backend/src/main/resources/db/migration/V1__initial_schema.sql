@@ -56,3 +56,4 @@ CREATE INDEX IF NOT EXISTS idx_boards_owner ON boards(owner_id);
 CREATE INDEX IF NOT EXISTS idx_board_members_user ON board_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_board_members_board ON board_members(board_id);
 CREATE INDEX IF NOT EXISTS idx_share_links_token ON share_links(token_hash);
+
