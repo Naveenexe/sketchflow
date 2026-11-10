@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Excalidraw, MainMenu, exportToBlob } from '@excalidraw/excalidraw';
+import {
+  CaptureUpdateAction,
+  Excalidraw,
+  MainMenu,
+  exportToBlob,
+} from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
 import {
   ArrowLeft,
@@ -50,12 +55,14 @@ function parseSceneWithDefaults(
   raw: string | null | undefined,
   activeCanvas: string,
   activePen: string,
-  sketchyStyle: boolean
+  sketchyStyle: boolean,
+  gridModeEnabled: boolean
 ): InitialDataState {
   const defaultAppState = {
     viewBackgroundColor: activeCanvas,
     currentItemStrokeColor: activePen,
     currentItemRoughness: sketchyStyle ? 1 : 0,
+    gridModeEnabled,
   };
 
   if (!raw) {
@@ -91,6 +98,7 @@ function parseSceneWithDefaults(
         viewBackgroundColor: resolvedBg,
         currentItemStrokeColor: activePen,
         currentItemRoughness: sketchyStyle ? 1 : 0,
+        gridModeEnabled,
       },
     } as unknown as InitialDataState;
   } catch {
@@ -165,10 +173,20 @@ export default function BoardEditorPage() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const defaultsRef = useRef({ activeCanvas, activePen, sketchyStyle });
+  const defaultsRef = useRef({
+    activeCanvas,
+    activePen,
+    sketchyStyle,
+    gridModeEnabled: canvasStyle === 'dots',
+  });
   useEffect(() => {
-    defaultsRef.current = { activeCanvas, activePen, sketchyStyle };
-  }, [activeCanvas, activePen, sketchyStyle]);
+    defaultsRef.current = {
+      activeCanvas,
+      activePen,
+      sketchyStyle,
+      gridModeEnabled: canvasStyle === 'dots',
+    };
+  }, [activeCanvas, activePen, sketchyStyle, canvasStyle]);
 
   const unsavedStorageKey = boardId ? `sketchflow_unsaved_${boardId}` : '';
 
@@ -237,6 +255,7 @@ export default function BoardEditorPage() {
   );
 
   const prevThemeCanvasRef = useRef<string>(activeCanvas);
+  const prevGridModeRef = useRef<boolean>(canvasStyle === 'dots');
 
   // Sync user's pen/roughness defaults dynamically into active Excalidraw instance
   useEffect(() => {
@@ -248,11 +267,32 @@ export default function BoardEditorPage() {
         currentItemStrokeColor: activePen,
         currentItemRoughness: sketchyStyle ? 1 : 0,
       },
+      captureUpdate: CaptureUpdateAction.NEVER,
     });
     setTimeout(() => {
       isApplyingRemoteRef.current = false;
     }, 0);
   }, [activePen, sketchyStyle, board]);
+
+  // Sync dot grid mode cleanly (componentDidUpdate in Excalidraw ignores prop changes)
+  useEffect(() => {
+    const api = excalidrawAPIRef.current;
+    const gridEnabled = canvasStyle === 'dots';
+    if (!api || !board) return;
+    if (prevGridModeRef.current === gridEnabled) return;
+    prevGridModeRef.current = gridEnabled;
+
+    isApplyingRemoteRef.current = true;
+    api.updateScene({
+      appState: {
+        gridModeEnabled: gridEnabled,
+      },
+      captureUpdate: CaptureUpdateAction.NEVER,
+    });
+    setTimeout(() => {
+      isApplyingRemoteRef.current = false;
+    }, 0);
+  }, [canvasStyle, board]);
 
   // Apply canvas & contrast adaptation whenever the user changes theme or custom canvas
   useEffect(() => {
@@ -278,6 +318,7 @@ export default function BoardEditorPage() {
         viewBackgroundColor: activeCanvas,
         currentItemStrokeColor: activePen,
       },
+      captureUpdate: CaptureUpdateAction.NEVER,
     });
     setTimeout(() => {
       isApplyingRemoteRef.current = false;
@@ -304,6 +345,7 @@ export default function BoardEditorPage() {
         elements: merged as unknown as Parameters<
           ExcalidrawImperativeAPI['updateScene']
         >[0]['elements'],
+        captureUpdate: CaptureUpdateAction.NEVER,
       });
       setTimeout(() => {
         isApplyingRemoteRef.current = false;
@@ -315,9 +357,13 @@ export default function BoardEditorPage() {
   const handleResyncState = useCallback((sceneJson: string) => {
     const api = excalidrawAPIRef.current;
     if (!api) return;
-    const { activeCanvas: bg, activePen: pen, sketchyStyle: sketchy } =
-      defaultsRef.current;
-    const parsed = parseSceneWithDefaults(sceneJson, bg, pen, sketchy);
+    const {
+      activeCanvas: bg,
+      activePen: pen,
+      sketchyStyle: sketchy,
+      gridModeEnabled: grid,
+    } = defaultsRef.current;
+    const parsed = parseSceneWithDefaults(sceneJson, bg, pen, sketchy, grid);
     const localElements =
       api.getSceneElementsIncludingDeleted() as unknown as ExcalidrawElementLike[];
     const remoteElements = (parsed.elements ||
@@ -329,6 +375,7 @@ export default function BoardEditorPage() {
       elements: merged as unknown as Parameters<
         ExcalidrawImperativeAPI['updateScene']
       >[0]['elements'],
+      captureUpdate: CaptureUpdateAction.NEVER,
     });
     setTimeout(() => {
       isApplyingRemoteRef.current = false;
@@ -343,6 +390,7 @@ export default function BoardEditorPage() {
         collaborators: collaborators as unknown as Parameters<
           ExcalidrawImperativeAPI['updateScene']
         >[0]['collaborators'],
+        captureUpdate: CaptureUpdateAction.NEVER,
       });
     },
     []
@@ -378,17 +426,21 @@ export default function BoardEditorPage() {
         setBoard(fetched);
         setBoardTitle(fetched.title);
 
-        const { activeCanvas: bg, activePen: pen, sketchyStyle: sketchy } =
-          defaultsRef.current;
+        const {
+          activeCanvas: bg,
+          activePen: pen,
+          sketchyStyle: sketchy,
+          gridModeEnabled: grid,
+        } = defaultsRef.current;
         const localBackup = localStorage.getItem(`sketchflow_unsaved_${boardId}`);
         if (localBackup && fetched.userRole !== 'VIEWER') {
-          const parsed = parseSceneWithDefaults(localBackup, bg, pen, sketchy);
+          const parsed = parseSceneWithDefaults(localBackup, bg, pen, sketchy, grid);
           setInitialScene(parsed);
           lastSavedJsonRef.current = fetched.sceneJson || '';
           pendingPayloadRef.current = localBackup;
           persistScene(localBackup);
         } else {
-          const parsed = parseSceneWithDefaults(fetched.sceneJson, bg, pen, sketchy);
+          const parsed = parseSceneWithDefaults(fetched.sceneJson, bg, pen, sketchy, grid);
           setInitialScene(parsed);
           lastSavedJsonRef.current = JSON.stringify({
             elements: parsed.elements || [],
@@ -657,7 +709,6 @@ export default function BoardEditorPage() {
           }}
           name={boardTitle}
           theme={currentPreset.mode}
-          gridModeEnabled={canvasStyle === 'dots'}
           initialData={initialScene || undefined}
           viewModeEnabled={isViewer}
           onChange={(elements, appState) => handleSceneChange(elements, appState)}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Excalidraw, MainMenu } from '@excalidraw/excalidraw';
+import { CaptureUpdateAction, Excalidraw, MainMenu } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
 import { Lock, Download, Loader2, ShieldAlert, LogIn, Palette } from 'lucide-react';
 import { resolveShareLink } from '../services/boardService';
@@ -109,6 +109,7 @@ export default function SharedBoardPage() {
       appState: {
         viewBackgroundColor: activeCanvas,
       },
+      captureUpdate: CaptureUpdateAction.NEVER,
     });
   }, [activeCanvas, activePen, board]);
 
@@ -234,7 +235,6 @@ export default function SharedBoardPage() {
           }}
           name={board.title}
           theme={currentPreset.mode}
-          gridModeEnabled={canvasStyle === 'dots'}
           initialData={initialScene}
           viewModeEnabled={true}
           UIOptions={{
