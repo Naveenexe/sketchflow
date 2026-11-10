@@ -10,21 +10,39 @@ import {
   Lock,
   Loader2,
   AlertTriangle,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import { getBoard, saveBoardScene, updateBoard } from '../services/boardService';
 import { useAuthStore } from '../store/authStore';
 import type { Board } from '../types';
-import { CloudStatusBadge } from '../components/CloudStatusBadge';
+import { useCollaboration, type RemoteCollaborator } from '../hooks/useCollaboration';
+import { ShareModal } from '../components/ShareModal';
 
 type ExcalidrawProps = Parameters<typeof Excalidraw>[0];
-type InitialDataState = Exclude<ExcalidrawProps['initialData'], ((...args: never[]) => unknown) | Promise<unknown> | null | undefined>;
+type InitialDataState = Exclude<
+  ExcalidrawProps['initialData'],
+  ((...args: never[]) => unknown) | Promise<unknown> | null | undefined
+>;
+type ExcalidrawImperativeAPI = Parameters<
+  NonNullable<ExcalidrawProps['excalidrawAPI']>
+>[0];
+
+interface ExcalidrawElementLike {
+  id: string;
+  version: number;
+  versionNonce: number;
+  [key: string]: unknown;
+}
 
 function parseSceneSafe(raw: string | null | undefined): InitialDataState {
   if (!raw) return { elements: [], appState: { viewBackgroundColor: '#ffffff' } };
   try {
-    const parsed = JSON.parse(raw) as { elements?: unknown[]; appState?: Record<string, unknown> };
+    const parsed = JSON.parse(raw) as {
+      elements?: unknown[];
+      appState?: Record<string, unknown>;
+    };
     const appState = { ...(parsed.appState || {}) };
-    // Excalidraw expects collaborators to be a Map, never a plain object
     delete appState.collaborators;
     return {
       elements: Array.isArray(parsed.elements) ? parsed.elements : [],
@@ -35,10 +53,41 @@ function parseSceneSafe(raw: string | null | undefined): InitialDataState {
   }
 }
 
+/**
+ * Merge local and remote elements by element ID using Excalidraw's version
+ * and versionNonce deterministic tie-breaking (FR-COLLAB-08).
+ */
+function mergeElements(
+  localElements: readonly ExcalidrawElementLike[],
+  remoteElements: readonly ExcalidrawElementLike[]
+): ExcalidrawElementLike[] {
+  const map = new Map<string, ExcalidrawElementLike>();
+
+  for (const el of localElements) {
+    map.set(el.id, el);
+  }
+
+  for (const remote of remoteElements) {
+    const local = map.get(remote.id);
+    if (!local) {
+      map.set(remote.id, remote);
+    } else if (
+      remote.version > local.version ||
+      (remote.version === local.version &&
+        remote.versionNonce > local.versionNonce)
+    ) {
+      map.set(remote.id, remote);
+    }
+  }
+
+  return Array.from(map.values());
+}
+
 export default function BoardEditorPage() {
   const { boardId } = useParams<{ boardId: string }>();
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
+  const token = useAuthStore((s) => s.token);
 
   const [board, setBoard] = useState<Board | null>(null);
   const [boardTitle, setBoardTitle] = useState('Untitled Board');
@@ -46,6 +95,10 @@ export default function BoardEditorPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'offline'>('saved');
+  const [showShareModal, setShowShareModal] = useState(false);
+
+  const excalidrawAPIRef = useRef<ExcalidrawImperativeAPI | null>(null);
+  const isApplyingRemoteRef = useRef(false);
 
   const lastSavedJsonRef = useRef<string>('');
   const pendingPayloadRef = useRef<string | null>(null);
@@ -68,7 +121,6 @@ export default function BoardEditorPage() {
         setSaveStatus('saved');
       } catch {
         setSaveStatus('offline');
-        // Retry automatically in 5 seconds (FR-BOARD-07)
         if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
         retryTimerRef.current = setTimeout(() => {
           if (pendingPayloadRef.current) {
@@ -79,6 +131,82 @@ export default function BoardEditorPage() {
     },
     [boardId, unsavedStorageKey]
   );
+
+  // Real-time collaboration handlers
+  const handleRemoteSceneUpdate = useCallback(
+    (remoteElements: readonly Record<string, unknown>[]) => {
+      const api = excalidrawAPIRef.current;
+      if (!api) return;
+
+      const localElements =
+        api.getSceneElementsIncludingDeleted() as unknown as ExcalidrawElementLike[];
+      const merged = mergeElements(
+        localElements,
+        remoteElements as unknown as ExcalidrawElementLike[]
+      );
+
+      isApplyingRemoteRef.current = true;
+      api.updateScene({
+        elements: merged as unknown as Parameters<
+          ExcalidrawImperativeAPI['updateScene']
+        >[0]['elements'],
+      });
+      setTimeout(() => {
+        isApplyingRemoteRef.current = false;
+      }, 0);
+    },
+    []
+  );
+
+  const handleResyncState = useCallback((sceneJson: string) => {
+    const api = excalidrawAPIRef.current;
+    if (!api) return;
+    const parsed = parseSceneSafe(sceneJson);
+    const localElements =
+      api.getSceneElementsIncludingDeleted() as unknown as ExcalidrawElementLike[];
+    const remoteElements = (parsed.elements ||
+      []) as unknown as ExcalidrawElementLike[];
+    const merged = mergeElements(localElements, remoteElements);
+
+    isApplyingRemoteRef.current = true;
+    api.updateScene({
+      elements: merged as unknown as Parameters<
+        ExcalidrawImperativeAPI['updateScene']
+      >[0]['elements'],
+    });
+    setTimeout(() => {
+      isApplyingRemoteRef.current = false;
+    }, 0);
+  }, []);
+
+  const handleCollaboratorsChange = useCallback(
+    (collaborators: Map<string, RemoteCollaborator>) => {
+      const api = excalidrawAPIRef.current;
+      if (!api) return;
+      api.updateScene({
+        collaborators: collaborators as unknown as Parameters<
+          ExcalidrawImperativeAPI['updateScene']
+        >[0]['collaborators'],
+      });
+    },
+    []
+  );
+
+  const {
+    wsStatus,
+    participants,
+    collabError,
+    sendSceneUpdate,
+    sendCursorUpdate,
+  } = useCollaboration({
+    boardId: board ? board.id : undefined,
+    token,
+    currentUserId: user?.userId,
+    userRole: board?.userRole,
+    onRemoteSceneUpdate: handleRemoteSceneUpdate,
+    onResyncState: handleResyncState,
+    onCollaboratorsChange: handleCollaboratorsChange,
+  });
 
   useEffect(() => {
     if (!boardId) return;
@@ -94,14 +222,12 @@ export default function BoardEditorPage() {
         setBoard(fetched);
         setBoardTitle(fetched.title);
 
-        // Check for unsaved local backup in case of previous network loss
         const localBackup = localStorage.getItem(`sketchflow_unsaved_${boardId}`);
         if (localBackup && fetched.userRole !== 'VIEWER') {
           const parsed = parseSceneSafe(localBackup);
           setInitialScene(parsed);
           lastSavedJsonRef.current = fetched.sceneJson || '';
           pendingPayloadRef.current = localBackup;
-          // Flush unsaved backup right away
           persistScene(localBackup);
         } else {
           const parsed = parseSceneSafe(fetched.sceneJson);
@@ -109,7 +235,8 @@ export default function BoardEditorPage() {
           lastSavedJsonRef.current = JSON.stringify({
             elements: parsed.elements || [],
             appState: {
-              viewBackgroundColor: parsed.appState?.viewBackgroundColor || '#ffffff',
+              viewBackgroundColor:
+                parsed.appState?.viewBackgroundColor || '#ffffff',
             },
           });
         }
@@ -133,7 +260,6 @@ export default function BoardEditorPage() {
     };
   }, [boardId, persistScene]);
 
-  // Flush pending saves when browser comes back online
   useEffect(() => {
     const handleOnline = () => {
       if (pendingPayloadRef.current) {
@@ -149,6 +275,7 @@ export default function BoardEditorPage() {
       elements: readonly unknown[],
       appState: { viewBackgroundColor?: string }
     ) => {
+      if (isApplyingRemoteRef.current) return;
       if (!board || board.userRole === 'VIEWER') return;
 
       const serialized = JSON.stringify({
@@ -162,6 +289,9 @@ export default function BoardEditorPage() {
         return;
       }
 
+      // Broadcast real-time update to peers (throttled at 80ms)
+      sendSceneUpdate(elements);
+
       // Protect unsaved work locally immediately (FR-BOARD-07)
       pendingPayloadRef.current = serialized;
       if (unsavedStorageKey) {
@@ -174,7 +304,7 @@ export default function BoardEditorPage() {
         persistScene(serialized);
       }, 1200);
     },
-    [board, persistScene, unsavedStorageKey]
+    [board, persistScene, sendSceneUpdate, unsavedStorageKey]
   );
 
   const handleTitleSave = async () => {
@@ -223,14 +353,6 @@ export default function BoardEditorPage() {
 
   const isViewer = board.userRole === 'VIEWER';
   const isOwner = board.userRole === 'OWNER';
-  const initials = user?.displayName
-    ? user.displayName
-        .split(' ')
-        .map((p) => p[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2)
-    : 'SF';
 
   return (
     <div className="sketchflow-container">
@@ -271,7 +393,9 @@ export default function BoardEditorPage() {
                 if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
               }}
               disabled={!isOwner}
-              title={isOwner ? 'Click to rename board' : 'Only the owner can rename'}
+              title={
+                isOwner ? 'Click to rename board' : 'Only the owner can rename'
+              }
               aria-label="Board title"
             />
           </div>
@@ -306,18 +430,59 @@ export default function BoardEditorPage() {
 
         {/* Right Action Shell */}
         <div className="sketchflow-right-section">
-          <CloudStatusBadge />
+          {/* Active Collaborator Avatars */}
+          {participants.length > 0 && (
+            <div
+              className="collab-avatars"
+              title={participants
+                .map((p) => `${p.displayName} (${p.role})`)
+                .join(', ')}
+            >
+              {participants.slice(0, 5).map((p, idx) => (
+                <div
+                  key={`${p.userId}-${idx}`}
+                  className="collab-avatar"
+                  style={{ backgroundColor: p.color }}
+                  title={`${p.displayName} (${p.role})`}
+                >
+                  {p.displayName.slice(0, 2).toUpperCase()}
+                </div>
+              ))}
+              {participants.length > 5 && (
+                <div className="collab-avatar collab-avatar-more">
+                  +{participants.length - 5}
+                </div>
+              )}
+            </div>
+          )}
 
-          <div className="sketchflow-user-badge" title={user?.email}>
-            <div className="sketchflow-avatar">{initials}</div>
-            <span>{user?.displayName || 'User'}</span>
+          {/* WebSocket Live Sync Pill */}
+          <div
+            className="sketchflow-save-indicator"
+            style={{ border: '1px solid #e2e8f0' }}
+            title={collabError || 'Real-time WebSocket status'}
+          >
+            {wsStatus === 'connected' ? (
+              <Wifi size={13} color="#10b981" />
+            ) : (
+              <WifiOff size={13} color="#f59e0b" />
+            )}
+            <span>
+              {wsStatus === 'connected'
+                ? `Live (${participants.length || 1})`
+                : wsStatus === 'reconnecting'
+                ? 'Syncing...'
+                : 'Connecting WS...'}
+            </span>
           </div>
 
           <button
             type="button"
             className="sketchflow-btn"
             onClick={() =>
-              alert('Use the top-left Excalidraw menu (≡) to export PNG, SVG, or JSON.')
+              alert(
+                'Use the top-left Excalidraw menu (≡) to export PNG, SVG, or JSON.'
+              )
             }
             title="Export Board"
           >
@@ -328,10 +493,8 @@ export default function BoardEditorPage() {
           <button
             type="button"
             className="sketchflow-btn sketchflow-btn-primary"
-            onClick={() =>
-              alert('Live collaboration & share links will be added in Milestones 6 & 7.')
-            }
-            title="Share Board"
+            onClick={() => setShowShareModal(true)}
+            title="Invite Collaborators & Share"
           >
             <Share2 size={15} />
             <span>Share</span>
@@ -342,10 +505,18 @@ export default function BoardEditorPage() {
       {/* Embedded Whiteboard Canvas */}
       <main className="sketchflow-canvas-wrapper">
         <Excalidraw
+          excalidrawAPI={(api) => {
+            excalidrawAPIRef.current = api;
+          }}
           name={boardTitle}
           initialData={initialScene || undefined}
           viewModeEnabled={isViewer}
           onChange={(elements, appState) => handleSceneChange(elements, appState)}
+          onPointerUpdate={(payload) => {
+            if (payload?.pointer) {
+              sendCursorUpdate(payload.pointer, payload.button || 'up');
+            }
+          }}
           UIOptions={{
             canvasActions: {
               saveToActiveFile: false,
@@ -355,6 +526,15 @@ export default function BoardEditorPage() {
           }}
         />
       </main>
+
+      {showShareModal && (
+        <ShareModal
+          boardId={board.id}
+          boardTitle={boardTitle}
+          isOwner={isOwner}
+          onClose={() => setShowShareModal(false)}
+        />
+      )}
     </div>
   );
 }

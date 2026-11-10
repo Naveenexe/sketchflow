@@ -9,6 +9,7 @@ import com.sketchflow.entity.BoardRole;
 import com.sketchflow.repository.BoardMemberRepository;
 import com.sketchflow.repository.BoardRepository;
 import com.sketchflow.repository.BoardSnapshotRepository;
+import com.sketchflow.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,6 +35,9 @@ class BoardServiceTest {
 
     @Mock
     private BoardSnapshotRepository boardSnapshotRepository;
+
+    @Mock
+    private UserRepository userRepository;
 
     @InjectMocks
     private BoardService boardService;
@@ -160,3 +164,4 @@ class BoardServiceTest {
         verify(boardMemberRepository).save(any(BoardMember.class));
     }
 }
+

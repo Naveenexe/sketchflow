@@ -36,3 +36,18 @@ export interface UpdateBoardRequest {
   thumbnailUrl?: string;
   archived?: boolean;
 }
+
+export interface BoardMember {
+  userId: string;
+  email: string;
+  displayName: string;
+  role: BoardRole;
+  joinedAt: string;
+}
+
+export interface CollabParticipant {
+  userId: string;
+  displayName: string;
+  role: BoardRole;
+  color: string;
+}

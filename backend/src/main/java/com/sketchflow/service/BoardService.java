@@ -1,15 +1,19 @@
 package com.sketchflow.service;
 
+import com.sketchflow.dto.AddMemberRequest;
 import com.sketchflow.dto.BoardDto;
+import com.sketchflow.dto.BoardMemberDto;
 import com.sketchflow.dto.CreateBoardRequest;
 import com.sketchflow.dto.UpdateBoardRequest;
 import com.sketchflow.entity.Board;
 import com.sketchflow.entity.BoardMember;
 import com.sketchflow.entity.BoardRole;
 import com.sketchflow.entity.BoardSnapshot;
+import com.sketchflow.entity.User;
 import com.sketchflow.repository.BoardMemberRepository;
 import com.sketchflow.repository.BoardRepository;
 import com.sketchflow.repository.BoardSnapshotRepository;
+import com.sketchflow.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,15 +27,18 @@ public class BoardService {
     private final BoardRepository boardRepository;
     private final BoardMemberRepository boardMemberRepository;
     private final BoardSnapshotRepository boardSnapshotRepository;
+    private final UserRepository userRepository;
 
     public BoardService(
             BoardRepository boardRepository,
             BoardMemberRepository boardMemberRepository,
-            BoardSnapshotRepository boardSnapshotRepository
+            BoardSnapshotRepository boardSnapshotRepository,
+            UserRepository userRepository
     ) {
         this.boardRepository = boardRepository;
         this.boardMemberRepository = boardMemberRepository;
         this.boardSnapshotRepository = boardSnapshotRepository;
+        this.userRepository = userRepository;
     }
 
     public List<BoardDto> listAccessibleBoards(UUID userId) {
@@ -145,6 +152,83 @@ public class BoardService {
         }
 
         return mapToDto(board, role);
+    }
+
+    public List<BoardMemberDto> listMembers(UUID boardId, UUID requesterId) {
+        Board board = boardRepository.findById(boardId)
+                .orElseThrow(() -> new IllegalArgumentException("Board not found"));
+        resolveRole(board, requesterId);
+
+        return boardMemberRepository.findByBoardId(boardId).stream()
+                .map(bm -> {
+                    Optional<User> u = userRepository.findById(bm.getUserId());
+                    return new BoardMemberDto(
+                            bm.getUserId(),
+                            u.map(User::getEmail).orElse("unknown"),
+                            u.map(User::getDisplayName).orElse("Unknown User"),
+                            bm.getRole().name(),
+                            bm.getJoinedAt()
+                    );
+                })
+                .toList();
+    }
+
+    @Transactional
+    public BoardMemberDto addOrUpdateMember(UUID boardId, UUID requesterId, AddMemberRequest request) {
+        Board board = boardRepository.findById(boardId)
+                .orElseThrow(() -> new IllegalArgumentException("Board not found"));
+
+        BoardRole requesterRole = resolveRole(board, requesterId);
+        if (requesterRole != BoardRole.OWNER) {
+            throw new SecurityException("Permission denied: Only the board owner can manage members");
+        }
+
+        if (request.getRole() == BoardRole.OWNER) {
+            throw new IllegalArgumentException("Cannot assign OWNER role via member invite");
+        }
+
+        User targetUser = userRepository.findByEmail(request.getEmail().toLowerCase().trim())
+                .orElseThrow(() -> new IllegalArgumentException("No registered user found with email: " + request.getEmail()));
+
+        if (targetUser.getId().equals(board.getOwnerId())) {
+            throw new IllegalArgumentException("Board owner already has full access");
+        }
+
+        BoardMember member = boardMemberRepository.findByBoardIdAndUserId(boardId, targetUser.getId())
+                .orElse(new BoardMember(boardId, targetUser.getId(), request.getRole()));
+        member.setRole(request.getRole());
+        member = boardMemberRepository.save(member);
+
+        return new BoardMemberDto(
+                targetUser.getId(),
+                targetUser.getEmail(),
+                targetUser.getDisplayName(),
+                member.getRole().name(),
+                member.getJoinedAt()
+        );
+    }
+
+    @Transactional
+    public void removeMember(UUID boardId, UUID requesterId, UUID targetUserId) {
+        Board board = boardRepository.findById(boardId)
+                .orElseThrow(() -> new IllegalArgumentException("Board not found"));
+
+        BoardRole requesterRole = resolveRole(board, requesterId);
+        if (requesterRole != BoardRole.OWNER) {
+            throw new SecurityException("Permission denied: Only the board owner can remove members");
+        }
+
+        if (targetUserId.equals(board.getOwnerId())) {
+            throw new IllegalArgumentException("Cannot remove the board owner");
+        }
+
+        boardMemberRepository.deleteByBoardIdAndUserId(boardId, targetUserId);
+    }
+
+    public BoardRole resolveUserRole(UUID boardId, UUID userId) {
+        Board board = boardRepository.findById(boardId)
+                .orElseThrow(() -> new IllegalArgumentException("Board not found"));
+        return resolveRole(board, userId);
     }
 
     private BoardRole resolveRole(Board board, UUID userId) {

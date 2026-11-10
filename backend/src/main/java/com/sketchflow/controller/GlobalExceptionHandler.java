@@ -42,3 +42,4 @@ public class GlobalExceptionHandler {
                 .body(Map.of("error", firstError, "fields", fieldErrors));
     }
 }
+

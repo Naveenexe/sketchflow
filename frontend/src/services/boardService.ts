@@ -1,5 +1,11 @@
 import { apiClient } from './api';
-import type { Board, CreateBoardRequest, UpdateBoardRequest } from '../types';
+import type {
+  Board,
+  BoardMember,
+  BoardRole,
+  CreateBoardRequest,
+  UpdateBoardRequest,
+} from '../types';
 
 export async function listBoards(): Promise<Board[]> {
   const response = await apiClient.get<Board[]>('/boards');
@@ -48,4 +54,30 @@ export async function saveBoardScene(
     sceneJson,
   });
   return response.data;
+}
+
+export async function listBoardMembers(boardId: string): Promise<BoardMember[]> {
+  const response = await apiClient.get<BoardMember[]>(
+    `/boards/${boardId}/members`
+  );
+  return response.data;
+}
+
+export async function addBoardMember(
+  boardId: string,
+  email: string,
+  role: BoardRole
+): Promise<BoardMember> {
+  const response = await apiClient.post<BoardMember>(
+    `/boards/${boardId}/members`,
+    { email, role }
+  );
+  return response.data;
+}
+
+export async function removeBoardMember(
+  boardId: string,
+  userId: string
+): Promise<void> {
+  await apiClient.delete(`/boards/${boardId}/members/${userId}`);
 }

@@ -1,6 +1,8 @@
 package com.sketchflow.controller;
 
+import com.sketchflow.dto.AddMemberRequest;
 import com.sketchflow.dto.BoardDto;
+import com.sketchflow.dto.BoardMemberDto;
 import com.sketchflow.dto.CreateBoardRequest;
 import com.sketchflow.dto.ScenePayload;
 import com.sketchflow.dto.UpdateBoardRequest;
@@ -92,6 +94,34 @@ public class BoardController {
     ) {
         BoardDto updated = boardService.updateBoardScene(boardId, principal.getId(), payload.getSceneJson());
         return ResponseEntity.ok(updated);
+    }
+
+    @GetMapping("/{boardId}/members")
+    public ResponseEntity<List<BoardMemberDto>> listMembers(
+            @PathVariable UUID boardId,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(boardService.listMembers(boardId, principal.getId()));
+    }
+
+    @PostMapping("/{boardId}/members")
+    public ResponseEntity<BoardMemberDto> addMember(
+            @PathVariable UUID boardId,
+            @AuthenticationPrincipal UserPrincipal principal,
+            @Valid @RequestBody AddMemberRequest request
+    ) {
+        BoardMemberDto member = boardService.addOrUpdateMember(boardId, principal.getId(), request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(member);
+    }
+
+    @DeleteMapping("/{boardId}/members/{userId}")
+    public ResponseEntity<Map<String, String>> removeMember(
+            @PathVariable UUID boardId,
+            @PathVariable UUID userId,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        boardService.removeMember(boardId, principal.getId(), userId);
+        return ResponseEntity.ok(Map.of("message", "Member removed"));
     }
 }
 
