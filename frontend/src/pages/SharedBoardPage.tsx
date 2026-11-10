@@ -8,6 +8,7 @@ import { useAuthStore } from '../store/authStore';
 import { THEME_MAP, useThemeStore } from '../store/themeStore';
 import {
   adaptElementsForCanvas,
+  isSafeEmbeddableUrl,
   resolveBoardBackground,
 } from '../utils/sceneTheme';
 import type { Board } from '../types';
@@ -237,6 +238,7 @@ export default function SharedBoardPage() {
           theme={currentPreset.mode}
           initialData={initialScene}
           viewModeEnabled={true}
+          validateEmbeddable={isSafeEmbeddableUrl}
           UIOptions={{
             canvasActions: {
               saveToActiveFile: false,

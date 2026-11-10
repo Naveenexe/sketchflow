@@ -76,3 +76,13 @@ export function adaptElementsForCanvas<T extends Record<string, unknown>>(
 
   return changed ? mapped : (elements as T[]);
 }
+
+export function isSafeEmbeddableUrl(link: string): boolean {
+  try {
+    const parsed = new URL(link);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+

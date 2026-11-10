@@ -21,6 +21,7 @@ import { useAuthStore } from '../store/authStore';
 import { THEME_MAP, useThemeStore } from '../store/themeStore';
 import {
   adaptElementsForCanvas,
+  isSafeEmbeddableUrl,
   resolveBoardBackground,
 } from '../utils/sceneTheme';
 import { getBoard, saveBoardScene, updateBoard } from '../services/boardService';
@@ -711,6 +712,7 @@ export default function BoardEditorPage() {
           theme={currentPreset.mode}
           initialData={initialScene || undefined}
           viewModeEnabled={isViewer}
+          validateEmbeddable={isSafeEmbeddableUrl}
           onChange={(elements, appState) => handleSceneChange(elements, appState)}
           onPointerUpdate={(payload) => {
             if (autoHideBar) {
