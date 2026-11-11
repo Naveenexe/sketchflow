@@ -602,6 +602,13 @@ export default function BoardEditorPage() {
       : wsStatus === 'reconnecting'
       ? 'Syncing...'
       : 'Connecting...';
+  const mobileDotClass =
+    saveStatus === 'offline'
+      ? 'error'
+      : saveStatus === 'saving' || wsStatus === 'reconnecting'
+      ? ''
+      : 'live';
+  const mobileStatusLabel = `${saveLabel} • ${wsLabel}`;
 
   return (
     <div
@@ -634,12 +641,6 @@ export default function BoardEditorPage() {
 
           <div className="sf-divider sf-desktop-only" />
 
-          <span
-            className={`status-dot sf-mobile-only ${dotClass}`}
-            title={saveLabel}
-            aria-label={saveLabel}
-          />
-
           <input
             type="text"
             className="sf-title-input"
@@ -670,9 +671,15 @@ export default function BoardEditorPage() {
         </div>
 
         <div className="sf-topbar-right">
+          <span
+            className={`status-dot sf-editor-status-dot sf-mobile-only ${mobileDotClass}`}
+            title={mobileStatusLabel}
+            aria-label={mobileStatusLabel}
+          />
+
           {participants.length > 0 && (
             <div
-              className="collab-avatars"
+              className="collab-avatars sf-desktop-only"
               title={participants
                 .map((p) => `${p.displayName} (${p.role})`)
                 .join(', ')}
@@ -680,32 +687,17 @@ export default function BoardEditorPage() {
               {participants.slice(0, 5).map((p, idx) => (
                 <div
                   key={`${p.userId}-${idx}`}
-                  className={`collab-avatar ${
-                    idx >= 2 ? 'collab-avatar-desktop-only' : ''
-                  }`}
+                  className="collab-avatar"
                   style={{ backgroundColor: p.color }}
                   title={`${p.displayName} (${p.role})`}
                 >
                   {p.displayName.slice(0, 2).toUpperCase()}
                 </div>
               ))}
-              {participants.length > 2 && (
-                <button
-                  type="button"
-                  className="collab-avatar collab-avatar-more sf-mobile-only"
-                  onClick={() => {
-                    setShowMobileMenu(false);
-                    setShowCollabPopover((v) => !v);
-                  }}
-                  aria-label={`${participants.length} active collaborators`}
-                >
-                  +{participants.length - 2}
-                </button>
-              )}
               {participants.length > 5 && (
                 <button
                   type="button"
-                  className="collab-avatar collab-avatar-more sf-desktop-only"
+                  className="collab-avatar collab-avatar-more"
                   onClick={() => {
                     setShowMobileMenu(false);
                     setShowCollabPopover((v) => !v);
@@ -744,7 +736,7 @@ export default function BoardEditorPage() {
 
           <button
             type="button"
-            className="sf-btn sf-btn-primary"
+            className="sf-btn sf-btn-primary sf-btn-share"
             onClick={() => setShowShareModal(true)}
             title="Invite Collaborators & Share"
           >
@@ -767,7 +759,7 @@ export default function BoardEditorPage() {
         </div>
       </header>
 
-      {showCollabPopover && participants.length > 0 && (
+      {showCollabPopover && (
         <>
           <div
             className="sf-popover-backdrop"
@@ -777,20 +769,26 @@ export default function BoardEditorPage() {
             <div className="sf-popover-header">
               <span>Collaborators ({participants.length})</span>
             </div>
-            {participants.map((p, idx) => (
-              <div key={`${p.userId}-${idx}`} className="sf-collab-row">
-                <div className="sf-collab-row-user">
-                  <div
-                    className="collab-avatar"
-                    style={{ backgroundColor: p.color, marginLeft: 0 }}
-                  >
-                    {p.displayName.slice(0, 2).toUpperCase()}
-                  </div>
-                  <span className="sf-collab-row-name">{p.displayName}</span>
-                </div>
-                <span className="role-text">{p.role.toLowerCase()}</span>
+            {participants.length === 0 ? (
+              <div className="sf-popover-status-row">
+                <span>No active collaborators right now.</span>
               </div>
-            ))}
+            ) : (
+              participants.map((p, idx) => (
+                <div key={`${p.userId}-${idx}`} className="sf-collab-row">
+                  <div className="sf-collab-row-user">
+                    <div
+                      className="collab-avatar"
+                      style={{ backgroundColor: p.color, marginLeft: 0 }}
+                    >
+                      {p.displayName.slice(0, 2).toUpperCase()}
+                    </div>
+                    <span className="sf-collab-row-name">{p.displayName}</span>
+                  </div>
+                  <span className="role-text">{p.role.toLowerCase()}</span>
+                </div>
+              ))
+            )}
           </div>
         </>
       )}
@@ -867,20 +865,18 @@ export default function BoardEditorPage() {
               <Download size={16} strokeWidth={1.5} />
               <span>Export &amp; Backup</span>
             </button>
-            {participants.length > 0 && (
-              <button
-                type="button"
-                className="sf-popover-item"
-                role="menuitem"
-                onClick={() => {
-                  setShowMobileMenu(false);
-                  setShowCollabPopover(true);
-                }}
-              >
-                <Users size={16} strokeWidth={1.5} />
-                <span>Collaborators ({participants.length})</span>
-              </button>
-            )}
+            <button
+              type="button"
+              className="sf-popover-item"
+              role="menuitem"
+              onClick={() => {
+                setShowMobileMenu(false);
+                setShowCollabPopover(true);
+              }}
+            >
+              <Users size={16} strokeWidth={1.5} />
+              <span>Collaborators ({participants.length})</span>
+            </button>
           </div>
         </>
       )}

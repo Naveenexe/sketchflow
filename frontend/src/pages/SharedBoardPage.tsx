@@ -227,6 +227,12 @@ export default function SharedBoardPage() {
         </div>
 
         <div className="sf-topbar-right">
+          <span
+            className="status-dot sf-editor-status-dot live sf-mobile-only"
+            title="Public read-only"
+            aria-label="Public read-only"
+          />
+
           <div className="sf-desktop-only">
             <ThemeQuickControls showEditorOptions={false} />
           </div>
@@ -240,14 +246,22 @@ export default function SharedBoardPage() {
             <span>Export</span>
           </button>
 
-          {!isAuthenticated && (
+          {!isAuthenticated ? (
             <button
               type="button"
-              className="sf-btn sf-btn-primary"
+              className="sf-btn sf-btn-primary sf-btn-share"
               onClick={() => navigate('/login')}
             >
               <LogIn size={16} strokeWidth={1.5} />
               <span>Sign in</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="sf-btn sf-btn-primary sf-btn-share sf-mobile-only"
+              onClick={() => navigate('/dashboard')}
+            >
+              <span>Workspace</span>
             </button>
           )}
 
