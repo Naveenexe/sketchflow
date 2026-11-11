@@ -2,7 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { CaptureUpdateAction, Excalidraw, MainMenu } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
-import { Lock, Download, Loader2, ShieldAlert, LogIn, Palette } from 'lucide-react';
+import {
+  Lock,
+  Download,
+  Loader2,
+  ShieldAlert,
+  LogIn,
+  Palette,
+  MoreHorizontal,
+  Sun,
+  Moon,
+} from 'lucide-react';
 import { resolveShareLink } from '../services/boardService';
 import { useAuthStore } from '../store/authStore';
 import { THEME_MAP, useThemeStore } from '../store/themeStore';
@@ -77,6 +87,7 @@ export default function SharedBoardPage() {
   const customCanvas = useThemeStore((s) => s.customCanvas);
   const customPen = useThemeStore((s) => s.customPen);
   const canvasStyle = useThemeStore((s) => s.canvasStyle);
+  const toggleLightDark = useThemeStore((s) => s.toggleLightDark);
   const currentPreset = THEME_MAP[presetId];
   const activeCanvas = customCanvas || currentPreset.canvas;
   const activePen = customPen || currentPreset.pen;
@@ -86,6 +97,16 @@ export default function SharedBoardPage() {
   const [error, setError] = useState<string | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+
+  useEffect(() => {
+    if (!showMobileMenu) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowMobileMenu(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showMobileMenu]);
 
   const excalidrawAPIRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const prevThemeCanvasRef = useRef<string>(activeCanvas);
@@ -149,7 +170,7 @@ export default function SharedBoardPage() {
 
   if (loading) {
     return (
-      <div className="dashboard-empty" style={{ height: '100vh' }}>
+      <div className="dashboard-empty sf-fullscreen-state">
         <Loader2 size={16} strokeWidth={1.5} className="spin" />
         <p>Opening shared board...</p>
       </div>
@@ -158,7 +179,7 @@ export default function SharedBoardPage() {
 
   if (error || !board) {
     return (
-      <div className="dashboard-empty" style={{ height: '100vh' }}>
+      <div className="dashboard-empty sf-fullscreen-state">
         <ShieldAlert size={20} strokeWidth={1.5} color="var(--danger)" />
         <h3>Share link unavailable</h3>
         <p>{error}</p>
@@ -187,29 +208,32 @@ export default function SharedBoardPage() {
             type="button"
             className="sf-brand"
             onClick={() => navigate(isAuthenticated ? '/dashboard' : '/login')}
+            aria-label="SketchFlow"
           >
             <BrandMark size={20} />
-            <span>SketchFlow</span>
+            <span className="sf-desktop-only">SketchFlow</span>
           </button>
 
-          <div className="sf-divider" />
+          <div className="sf-divider sf-desktop-only" />
 
-          <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink)' }}>
+          <span className="sf-shared-title" title={board.title}>
             {board.title}
           </span>
 
-          <div className="status-indicator">
+          <div className="status-indicator sf-desktop-only">
             <Lock size={16} strokeWidth={1.5} />
             <span>Public read-only</span>
           </div>
         </div>
 
         <div className="sf-topbar-right">
-          <ThemeQuickControls showEditorOptions={false} />
+          <div className="sf-desktop-only">
+            <ThemeQuickControls showEditorOptions={false} />
+          </div>
 
           <button
             type="button"
-            className="sf-btn"
+            className="sf-btn sf-desktop-only"
             onClick={() => setShowExportModal(true)}
           >
             <Download size={16} strokeWidth={1.5} />
@@ -226,8 +250,84 @@ export default function SharedBoardPage() {
               <span>Sign in</span>
             </button>
           )}
+
+          <button
+            type="button"
+            className="icon-btn sf-mobile-only"
+            onClick={() => setShowMobileMenu((v) => !v)}
+            aria-label="More options"
+            aria-expanded={showMobileMenu}
+          >
+            <MoreHorizontal size={20} strokeWidth={1.5} />
+          </button>
         </div>
       </header>
+
+      {showMobileMenu && (
+        <>
+          <div
+            className="sf-popover-backdrop"
+            onClick={() => setShowMobileMenu(false)}
+          />
+          <div className="sf-popover-menu" role="menu">
+            <div className="sf-popover-header">
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <BrandMark size={16} />
+                <span>SketchFlow</span>
+              </span>
+            </div>
+            <div className="sf-popover-status-row">
+              <Lock size={16} strokeWidth={1.5} />
+              <span>Public read-only</span>
+            </div>
+            <div className="sf-popover-divider" />
+            <button
+              type="button"
+              className="sf-popover-item"
+              role="menuitem"
+              onClick={() => {
+                toggleLightDark();
+                setShowMobileMenu(false);
+              }}
+            >
+              {currentPreset.mode === 'dark' ? (
+                <Sun size={16} strokeWidth={1.5} />
+              ) : (
+                <Moon size={16} strokeWidth={1.5} />
+              )}
+              <span>
+                {currentPreset.mode === 'dark'
+                  ? 'Switch to light theme'
+                  : 'Switch to dark theme'}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="sf-popover-item"
+              role="menuitem"
+              onClick={() => {
+                setShowMobileMenu(false);
+                setShowThemeModal(true);
+              }}
+            >
+              <Palette size={16} strokeWidth={1.5} />
+              <span>Appearance</span>
+            </button>
+            <button
+              type="button"
+              className="sf-popover-item"
+              role="menuitem"
+              onClick={() => {
+                setShowMobileMenu(false);
+                setShowExportModal(true);
+              }}
+            >
+              <Download size={16} strokeWidth={1.5} />
+              <span>Export &amp; Backup</span>
+            </button>
+          </div>
+        </>
+      )}
 
       <main className="sketchflow-canvas-wrapper">
         <Excalidraw

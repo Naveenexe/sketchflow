@@ -74,7 +74,8 @@ export default function DashboardPage() {
 
   const handleCreate = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    const title = newTitle.trim() || 'Untitled Board';
+    const useUntitled = typeof window !== 'undefined' && window.innerWidth < 640;
+    const title = (useUntitled ? '' : newTitle.trim()) || 'Untitled Board';
     setCreating(true);
     setError(null);
     try {
@@ -169,16 +170,21 @@ export default function DashboardPage() {
             <BrandMark size={20} />
             <span>SketchFlow</span>
           </div>
-          <div className="sf-divider" />
-          <span style={{ color: 'var(--ink-muted)', fontSize: 13 }}>
+          <div className="sf-divider sf-desktop-only" />
+          <span
+            className="sf-desktop-only"
+            style={{ color: 'var(--ink-muted)', fontSize: 13 }}
+          >
             Workspace
           </span>
         </div>
 
         <div className="sf-topbar-right">
-          <CloudStatusBadge />
+          <div className="sf-desktop-only">
+            <CloudStatusBadge />
+          </div>
           <ThemeQuickControls showEditorOptions={false} />
-          <div className="sf-user-badge" title={user?.email}>
+          <div className="sf-user-badge sf-desktop-only" title={user?.email}>
             <div className="sf-avatar">{initials}</div>
             <span>{user?.displayName || 'User'}</span>
           </div>
@@ -187,9 +193,10 @@ export default function DashboardPage() {
             className="sf-btn"
             onClick={handleLogout}
             title="Sign Out"
+            aria-label="Sign out"
           >
             <LogOut size={16} strokeWidth={1.5} />
-            <span>Sign out</span>
+            <span className="sf-desktop-only">Sign out</span>
           </button>
         </div>
       </header>
@@ -200,7 +207,7 @@ export default function DashboardPage() {
             <input
               ref={newInputRef}
               type="text"
-              className="sf-input"
+              className="sf-input create-board-input"
               placeholder="New board title..."
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
@@ -208,7 +215,7 @@ export default function DashboardPage() {
             />
             <button
               type="submit"
-              className="sf-btn sf-btn-primary"
+              className="sf-btn sf-btn-primary create-board-submit"
               disabled={creating}
             >
               {creating ? (
@@ -234,7 +241,7 @@ export default function DashboardPage() {
             </div>
 
             <select
-              className="sf-select"
+              className="sf-select dashboard-sort-select"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as 'updated' | 'title')}
               aria-label="Sort boards"

@@ -16,6 +16,10 @@ import {
   AlertTriangle,
   Palette,
   Grid3X3,
+  MoreHorizontal,
+  Sun,
+  Moon,
+  Users,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { THEME_MAP, useThemeStore } from '../store/themeStore';
@@ -150,6 +154,7 @@ export default function BoardEditorPage() {
   const canvasStyle = useThemeStore((s) => s.canvasStyle);
   const autoHideBar = useThemeStore((s) => s.autoHideBar);
   const setCanvasStyle = useThemeStore((s) => s.setCanvasStyle);
+  const toggleLightDark = useThemeStore((s) => s.toggleLightDark);
 
   const currentPreset = THEME_MAP[presetId];
   const activeCanvas = customCanvas || currentPreset.canvas;
@@ -164,7 +169,21 @@ export default function BoardEditorPage() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showCollabPopover, setShowCollabPopover] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
+
+  useEffect(() => {
+    if (!showMobileMenu && !showCollabPopover) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowMobileMenu(false);
+        setShowCollabPopover(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showMobileMenu, showCollabPopover]);
 
   const excalidrawAPIRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const isApplyingRemoteRef = useRef(false);
@@ -535,7 +554,7 @@ export default function BoardEditorPage() {
 
   if (loading) {
     return (
-      <div className="dashboard-empty" style={{ height: '100vh' }}>
+      <div className="dashboard-empty sf-fullscreen-state">
         <Loader2 size={16} strokeWidth={1.5} className="spin" />
         <p>Loading board...</p>
       </div>
@@ -544,7 +563,7 @@ export default function BoardEditorPage() {
 
   if (loadError || !board) {
     return (
-      <div className="dashboard-empty" style={{ height: '100vh' }}>
+      <div className="dashboard-empty sf-fullscreen-state">
         <AlertTriangle size={20} strokeWidth={1.5} color="var(--danger)" />
         <h3>Unable to open board</h3>
         <p>{loadError || 'Board not found.'}</p>
@@ -562,6 +581,27 @@ export default function BoardEditorPage() {
 
   const isViewer = board.userRole === 'VIEWER';
   const isOwner = board.userRole === 'OWNER';
+
+  const saveLabel = isViewer
+    ? 'View only'
+    : saveStatus === 'saved'
+    ? 'Saved'
+    : saveStatus === 'saving'
+    ? 'Saving...'
+    : 'Offline';
+  const dotClass = isViewer
+    ? ''
+    : saveStatus === 'saved'
+    ? 'live'
+    : saveStatus === 'offline'
+    ? 'error'
+    : '';
+  const wsLabel =
+    wsStatus === 'connected'
+      ? `Live (${participants.length || 1})`
+      : wsStatus === 'reconnecting'
+      ? 'Syncing...'
+      : 'Connecting...';
 
   return (
     <div
@@ -584,7 +624,7 @@ export default function BoardEditorPage() {
 
           <button
             type="button"
-            className="sf-brand"
+            className="sf-brand sf-desktop-only"
             onClick={() => navigate('/dashboard')}
             title="SketchFlow Workspace"
           >
@@ -592,7 +632,13 @@ export default function BoardEditorPage() {
             <span>SketchFlow</span>
           </button>
 
-          <div className="sf-divider" />
+          <div className="sf-divider sf-desktop-only" />
+
+          <span
+            className={`status-dot sf-mobile-only ${dotClass}`}
+            title={saveLabel}
+            aria-label={saveLabel}
+          />
 
           <input
             type="text"
@@ -611,28 +657,14 @@ export default function BoardEditorPage() {
           />
 
           {isViewer ? (
-            <div className="status-indicator">
+            <div className="status-indicator sf-desktop-only">
               <Lock size={16} strokeWidth={1.5} />
               <span>View only</span>
             </div>
           ) : (
-            <div className="status-indicator">
-              <span
-                className={`status-dot ${
-                  saveStatus === 'saved'
-                    ? 'live'
-                    : saveStatus === 'offline'
-                    ? 'error'
-                    : ''
-                }`}
-              />
-              <span>
-                {saveStatus === 'saved'
-                  ? 'Saved'
-                  : saveStatus === 'saving'
-                  ? 'Saving...'
-                  : 'Offline'}
-              </span>
+            <div className="status-indicator sf-desktop-only">
+              <span className={`status-dot ${dotClass}`} />
+              <span>{saveLabel}</span>
             </div>
           )}
         </div>
@@ -648,42 +680,61 @@ export default function BoardEditorPage() {
               {participants.slice(0, 5).map((p, idx) => (
                 <div
                   key={`${p.userId}-${idx}`}
-                  className="collab-avatar"
+                  className={`collab-avatar ${
+                    idx >= 2 ? 'collab-avatar-desktop-only' : ''
+                  }`}
                   style={{ backgroundColor: p.color }}
                   title={`${p.displayName} (${p.role})`}
                 >
                   {p.displayName.slice(0, 2).toUpperCase()}
                 </div>
               ))}
+              {participants.length > 2 && (
+                <button
+                  type="button"
+                  className="collab-avatar collab-avatar-more sf-mobile-only"
+                  onClick={() => {
+                    setShowMobileMenu(false);
+                    setShowCollabPopover((v) => !v);
+                  }}
+                  aria-label={`${participants.length} active collaborators`}
+                >
+                  +{participants.length - 2}
+                </button>
+              )}
               {participants.length > 5 && (
-                <div className="collab-avatar collab-avatar-more">
+                <button
+                  type="button"
+                  className="collab-avatar collab-avatar-more sf-desktop-only"
+                  onClick={() => {
+                    setShowMobileMenu(false);
+                    setShowCollabPopover((v) => !v);
+                  }}
+                  aria-label={`${participants.length} active collaborators`}
+                >
                   +{participants.length - 5}
-                </div>
+                </button>
               )}
             </div>
           )}
 
           <div
-            className="status-indicator"
+            className="status-indicator sf-desktop-only"
             title={collabError || 'Real-time WebSocket status'}
           >
             <span
               className={`status-dot ${wsStatus === 'connected' ? 'live' : ''}`}
             />
-            <span>
-              {wsStatus === 'connected'
-                ? `Live (${participants.length || 1})`
-                : wsStatus === 'reconnecting'
-                ? 'Syncing...'
-                : 'Connecting...'}
-            </span>
+            <span>{wsLabel}</span>
           </div>
 
-          <ThemeQuickControls showEditorOptions={true} />
+          <div className="sf-desktop-only">
+            <ThemeQuickControls showEditorOptions={true} />
+          </div>
 
           <button
             type="button"
-            className="sf-btn"
+            className="sf-btn sf-desktop-only"
             onClick={() => setShowExportModal(true)}
             title="Export & Backup Board"
           >
@@ -700,8 +751,139 @@ export default function BoardEditorPage() {
             <Share2 size={16} strokeWidth={1.5} />
             <span>Share</span>
           </button>
+
+          <button
+            type="button"
+            className="icon-btn sf-mobile-only"
+            onClick={() => {
+              setShowCollabPopover(false);
+              setShowMobileMenu((v) => !v);
+            }}
+            aria-label="More options"
+            aria-expanded={showMobileMenu}
+          >
+            <MoreHorizontal size={20} strokeWidth={1.5} />
+          </button>
         </div>
       </header>
+
+      {showCollabPopover && participants.length > 0 && (
+        <>
+          <div
+            className="sf-popover-backdrop"
+            onClick={() => setShowCollabPopover(false)}
+          />
+          <div className="sf-popover-menu" role="dialog" aria-label="Active collaborators">
+            <div className="sf-popover-header">
+              <span>Collaborators ({participants.length})</span>
+            </div>
+            {participants.map((p, idx) => (
+              <div key={`${p.userId}-${idx}`} className="sf-collab-row">
+                <div className="sf-collab-row-user">
+                  <div
+                    className="collab-avatar"
+                    style={{ backgroundColor: p.color, marginLeft: 0 }}
+                  >
+                    {p.displayName.slice(0, 2).toUpperCase()}
+                  </div>
+                  <span className="sf-collab-row-name">{p.displayName}</span>
+                </div>
+                <span className="role-text">{p.role.toLowerCase()}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {showMobileMenu && (
+        <>
+          <div
+            className="sf-popover-backdrop"
+            onClick={() => setShowMobileMenu(false)}
+          />
+          <div className="sf-popover-menu" role="menu">
+            <div className="sf-popover-header">
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <BrandMark size={16} />
+                <span>SketchFlow</span>
+              </span>
+            </div>
+            <div className="sf-popover-status-row">
+              {isViewer ? (
+                <Lock size={16} strokeWidth={1.5} />
+              ) : (
+                <span className={`status-dot ${dotClass}`} />
+              )}
+              <span>{saveLabel}</span>
+            </div>
+            <div className="sf-popover-status-row">
+              <span
+                className={`status-dot ${wsStatus === 'connected' ? 'live' : ''}`}
+              />
+              <span>{wsLabel}</span>
+            </div>
+            <div className="sf-popover-divider" />
+            <button
+              type="button"
+              className="sf-popover-item"
+              role="menuitem"
+              onClick={() => {
+                toggleLightDark();
+                setShowMobileMenu(false);
+              }}
+            >
+              {currentPreset.mode === 'dark' ? (
+                <Sun size={16} strokeWidth={1.5} />
+              ) : (
+                <Moon size={16} strokeWidth={1.5} />
+              )}
+              <span>
+                {currentPreset.mode === 'dark'
+                  ? 'Switch to light theme'
+                  : 'Switch to dark theme'}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="sf-popover-item"
+              role="menuitem"
+              onClick={() => {
+                setShowMobileMenu(false);
+                setShowThemeModal(true);
+              }}
+            >
+              <Palette size={16} strokeWidth={1.5} />
+              <span>Appearance &amp; Canvas</span>
+            </button>
+            <button
+              type="button"
+              className="sf-popover-item"
+              role="menuitem"
+              onClick={() => {
+                setShowMobileMenu(false);
+                setShowExportModal(true);
+              }}
+            >
+              <Download size={16} strokeWidth={1.5} />
+              <span>Export &amp; Backup</span>
+            </button>
+            {participants.length > 0 && (
+              <button
+                type="button"
+                className="sf-popover-item"
+                role="menuitem"
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  setShowCollabPopover(true);
+                }}
+              >
+                <Users size={16} strokeWidth={1.5} />
+                <span>Collaborators ({participants.length})</span>
+              </button>
+            )}
+          </div>
+        </>
+      )}
 
       <main className="sketchflow-canvas-wrapper">
         <Excalidraw

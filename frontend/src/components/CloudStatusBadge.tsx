@@ -36,11 +36,19 @@ export function CloudStatusBadge() {
         }`}
       />
       <span>
-        {status === 'connected'
-          ? 'API online'
-          : status === 'connecting'
-          ? 'Waking server...'
-          : 'API offline — retry'}
+        {status === 'connected' ? (
+          'API online'
+        ) : status === 'connecting' ? (
+          <>
+            <span className="sf-from-480">Waking server...</span>
+            <span className="sf-below-480">Waking...</span>
+          </>
+        ) : (
+          <>
+            <span className="sf-from-480">API offline — retry</span>
+            <span className="sf-below-480">Retry API</span>
+          </>
+        )}
       </span>
       {status === 'error' && <RefreshCw size={16} strokeWidth={1.5} />}
     </button>
