@@ -61,8 +61,23 @@ export default function DashboardPage() {
     try {
       const data = await listBoards();
       setBoards(data);
-    } catch {
-      setError('Could not load boards. Check your connection and retry.');
+    } catch (err: unknown) {
+      const axiosErr = err as {
+        response?: { status?: number; data?: { error?: string } };
+        message?: string;
+      };
+      if (
+        axiosErr?.response?.status === 401 ||
+        axiosErr?.response?.status === 403
+      ) {
+        logout();
+        navigate('/login?expired=true');
+        return;
+      }
+      setError(
+        axiosErr?.response?.data?.error ||
+          'Could not load boards. Check your connection and retry.'
+      );
     } finally {
       setLoading(false);
     }
@@ -270,8 +285,31 @@ export default function DashboardPage() {
         </div>
 
         {error && (
-          <div className="auth-error" style={{ marginBottom: 16 }}>
-            {error}
+          <div
+            className="auth-error"
+            style={{
+              marginBottom: 16,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap',
+            }}
+          >
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={loadBoards}
+              className="sf-btn sf-btn-ghost sf-btn-sm"
+              style={{
+                padding: '4px 12px',
+                height: 32,
+                borderColor: 'currentColor',
+                fontWeight: 600,
+              }}
+            >
+              Retry
+            </button>
           </div>
         )}
 
@@ -280,7 +318,7 @@ export default function DashboardPage() {
             <Loader2 size={16} strokeWidth={1.5} className="spin" />
             <p>Loading boards...</p>
           </div>
-        ) : visibleBoards.length === 0 ? (
+        ) : error ? null : visibleBoards.length === 0 ? (
           <div className="dashboard-empty">
             <p>
               {searchQuery

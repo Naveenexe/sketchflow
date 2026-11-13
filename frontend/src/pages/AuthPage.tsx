@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowRight, Loader2 } from 'lucide-react';
 import { loginUser, registerUser } from '../services/authService';
 import { useAuthStore } from '../store/authStore';
@@ -18,6 +18,8 @@ export default function AuthPage() {
 
   const setAuth = useAuthStore((s) => s.setAuth);
   const navigate = useNavigate();
+  const location = useLocation();
+  const isSessionExpired = new URLSearchParams(location.search).get('expired') === 'true';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,6 +94,19 @@ export default function AuthPage() {
                 : 'Start creating and sharing visual boards.'}
             </p>
           </div>
+
+          {isSessionExpired && !error && (
+            <div
+              className="auth-error"
+              style={{
+                background: 'var(--accent-subtle)',
+                borderColor: 'var(--accent)',
+                color: 'var(--ink)',
+              }}
+            >
+              Your session has expired. Please sign in again.
+            </div>
+          )}
 
           {error && <div className="auth-error">{error}</div>}
 
